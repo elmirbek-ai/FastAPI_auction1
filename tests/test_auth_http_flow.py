@@ -75,7 +75,7 @@ class AuthenticationFlowTests(unittest.TestCase):
             "/auth/register/",
             json={
                 "username": "testuser",
-                "email": "test@example.invalid",
+                "email": "test@example.com",
                 "password": "TestPassword123!",
                 "role": "buyer",
             },
