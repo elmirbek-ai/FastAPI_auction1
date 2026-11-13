@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def run_database_snippet(source, database_url):
     env = os.environ.copy()
     env.pop("DATABASE_URL", None)
-    env.pop("SECRET_KEY", None)
+    env["SECRET_KEY"] = "test-only-signing-key-for-database-tests-123456"
     env["DATABASE_URL"] = database_url
     # Prevent accidental loading of local developer .env credentials.
     env["PYTHON_DOTENV_DISABLED"] = "1"
