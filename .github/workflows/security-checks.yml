@@ -19,5 +19,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Compile and inspect configuration
+      - name: Install minimal runtime smoke-test dependencies
+        run: python -m pip install "SQLAlchemy>=2,<3" "python-dotenv>=1,<2"
+      - name: Run security and isolated database smoke tests
         run: python -m unittest discover -s tests -v
