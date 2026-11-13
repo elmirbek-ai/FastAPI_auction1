@@ -7,7 +7,8 @@ import os
 import unittest
 from contextlib import asynccontextmanager
 
-import redis.asyncio as redis
+import redis
+import redis.asyncio as async_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from fastapi_limiter import FastAPILimiter
@@ -26,7 +27,7 @@ from auction_app.db import models  # noqa: F401,E402
 
 @asynccontextmanager
 async def test_lifespan(app: FastAPI):
-    client = redis.Redis.from_url(
+    client = async_redis.Redis.from_url(
         os.getenv("REDIS_URL", "redis://localhost:6379/0"),
         decode_responses=False,
     )
@@ -54,6 +55,14 @@ class PostgreSQLRedisAuthenticationTests(unittest.TestCase):
         finally:
             Base.metadata.drop_all(bind=engine)
             engine.dispose()
+
+    def setUp(self):
+        # Clear rate-limit state between tests in the dedicated disposable CI Redis.
+        # This suite is explicitly guarded against non-local service URLs.
+        redis_url = os.getenv("REDIS_URL", "")
+        if "localhost" not in redis_url and "127.0.0.1" not in redis_url:
+            raise RuntimeError("Refusing to clear a non-local Redis database")
+        redis.Redis.from_url(redis_url).flushdb()
 
     def test_registration_login_refresh_logout_in_real_services(self):
         registration = self.client.post(
