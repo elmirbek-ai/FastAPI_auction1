@@ -6,7 +6,7 @@ from datetime import timedelta
 from fastapi_limiter.depends import RateLimiter
 from auction_app.db.database import SessionLocal
 from typing import Optional
-from auction_app.db.schema import UserProfileSchema
+from auction_app.db.schema import UserRegistrationSchema
 from auction_app.db.models import UserProfile, RefreshToken
 from fastapi import Depends, HTTPException, status, APIRouter
 from sqlalchemy.orm import Session
@@ -54,11 +54,11 @@ def get_password_hash(password):
 
 
 @auth_router.post('/register/', tags=['Авторизация'], summary='Регистрация')
-async def register(user: UserProfileSchema, db: Session = Depends(get_db)):
+async def register(user: UserRegistrationSchema, db: Session = Depends(get_db)):
     user_db = db.query(UserProfile).filter(UserProfile.username == user.username).first()
     if user_db:
         raise HTTPException(status_code=400, detail='username бар экен')
-    new_hash_pass = get_password_hash(user.hashed_password)
+    new_hash_pass = get_password_hash(user.password)
     new_user = UserProfile(
         username=user.username,
         email=user.email,
