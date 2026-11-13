@@ -5,42 +5,30 @@ external services are contacted. This is an integration test of FastAPI,
 SQLAlchemy and JWT handling, not a production environment test.
 """
 import os
-import sys
-import types
+import tempfile
 import unittest
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy.pool import StaticPool
 
-# Ensure auth imports never touch the legacy hard-coded PostgreSQL settings
-# on main. SQLAlchemy ORM models use this in-process SQLite engine instead.
+# Use the *real* application database module with an isolated SQLite file.
+# A file-backed DB permits TestClient requests to run on separate threads.
+test_dir = tempfile.TemporaryDirectory(prefix="auction-auth-test-")
+test_db = Path(test_dir.name) / "auth.sqlite3"
+os.environ["DATABASE_URL"] = "sqlite+pysqlite:///" + test_db.as_posix()
 os.environ["SECRET_KEY"] = "test-only-signing-key-not-for-production-12345678"
-isolated_engine = create_engine(
-    "sqlite+pysqlite:///:memory:",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
-IsolatedBase = declarative_base()
-IsolatedSession = sessionmaker(bind=isolated_engine)
-db_stub = types.ModuleType("auction_app.db.database")
-db_stub.engine = isolated_engine
-db_stub.Base = IsolatedBase
-db_stub.SessionLocal = IsolatedSession
-sys.modules["auction_app.db.database"] = db_stub
 
 from auction_app.api.endpoints import auth  # noqa: E402
-from auction_app.db.database import Base  # noqa: E402
+from auction_app.db.database import Base, engine, SessionLocal  # noqa: E402
 from auction_app.db import models  # noqa: F401,E402
 
 
 class AuthenticationFlowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.engine = isolated_engine
-        cls.Session = IsolatedSession
+        cls.engine = engine
+        cls.Session = SessionLocal
         application = FastAPI()
         # Mount the real endpoint callables directly, omitting only the router's
         # Redis rate-limit wrapper. This tests HTTP validation, DB and JWT flow.
@@ -60,6 +48,7 @@ class AuthenticationFlowTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.client.close()
         cls.engine.dispose()
+        test_dir.cleanup()
 
     def setUp(self):
         Base.metadata.drop_all(self.engine)
