@@ -42,23 +42,18 @@ class AuthenticationFlowTests(unittest.TestCase):
         cls.engine = isolated_engine
         cls.Session = IsolatedSession
         application = FastAPI()
-        application.include_router(auth.auth_router)
+        # Mount the real endpoint callables directly, omitting only the router's
+        # Redis rate-limit wrapper. This tests HTTP validation, DB and JWT flow.
+        application.post("/auth/register/")(auth.register)
+        application.post("/auth/login")(auth.login)
+        application.post("/auth/refresh/")(auth.refresh)
+        application.post("/auth/logout")(auth.logout)
 
         def local_db():
             with cls.Session() as session:
                 yield session
 
         application.dependency_overrides[auth.get_db] = local_db
-
-        # The login rate-limit dependency requires a live Redis instance.
-        # Override only that dependency; keep the real route and DB/JWT logic.
-        for route in application.routes:
-            if getattr(route, "path", None) == "/auth/login":
-                # Route-level dependencies come first; the decorator explicitly
-                # declares RateLimiter before the form and database dependencies.
-                limiter_dependency = route.dependant.dependencies[0].call
-                application.dependency_overrides[limiter_dependency] = lambda: None
-
         cls.client = TestClient(application)
 
     @classmethod
