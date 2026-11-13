@@ -5,21 +5,31 @@ external services are contacted. This is an integration test of FastAPI,
 SQLAlchemy and JWT handling, not a production environment test.
 """
 import os
-import tempfile
+import sys
+import types
 import unittest
-from pathlib import Path
-from urllib.parse import quote
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# Configuration is required before auth modules are imported.
-os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
+# Ensure auth imports never touch the legacy hard-coded PostgreSQL settings
+# on main. SQLAlchemy ORM models use this in-process SQLite engine instead.
 os.environ["SECRET_KEY"] = "test-only-signing-key-not-for-production-12345678"
+isolated_engine = create_engine(
+    "sqlite+pysqlite:///:memory:",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+IsolatedBase = declarative_base()
+IsolatedSession = sessionmaker(bind=isolated_engine)
+db_stub = types.ModuleType("auction_app.db.database")
+db_stub.engine = isolated_engine
+db_stub.Base = IsolatedBase
+db_stub.SessionLocal = IsolatedSession
+sys.modules["auction_app.db.database"] = db_stub
 
 from auction_app.api.endpoints import auth  # noqa: E402
 from auction_app.db.database import Base  # noqa: E402
@@ -29,12 +39,8 @@ from auction_app.db import models  # noqa: F401,E402
 class AuthenticationFlowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.engine = create_engine(
-            "sqlite+pysqlite:///:memory:",
-            connect_args={"check_same_thread": False},
-            poolclass=StaticPool,
-        )
-        cls.Session = sessionmaker(bind=cls.engine)
+        cls.engine = isolated_engine
+        cls.Session = IsolatedSession
         application = FastAPI()
         application.include_router(auth.auth_router)
 
