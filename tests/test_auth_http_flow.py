@@ -52,12 +52,12 @@ class AuthenticationFlowTests(unittest.TestCase):
 
         # The login rate-limit dependency requires a live Redis instance.
         # Override only that dependency; keep the real route and DB/JWT logic.
-        from fastapi_limiter.depends import RateLimiter
         for route in application.routes:
             if getattr(route, "path", None) == "/auth/login":
-                for dependency in route.dependant.dependencies:
-                    if isinstance(dependency.call, RateLimiter):
-                        application.dependency_overrides[dependency.call] = lambda: None
+                # Route-level dependencies come first; the decorator explicitly
+                # declares RateLimiter before the form and database dependencies.
+                limiter_dependency = route.dependant.dependencies[0].call
+                application.dependency_overrides[limiter_dependency] = lambda: None
 
         cls.client = TestClient(application)
 
