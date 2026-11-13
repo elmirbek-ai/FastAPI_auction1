@@ -4,6 +4,14 @@ from pydantic import BaseModel, EmailStr, Field
 from auction_app.db.models import RoleChoices, FuelType, Transmission, StatusCar
 
 
+class UserRegistrationSchema(BaseModel):
+    username: str = Field(min_length=3, max_length=100)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=72)
+    phone_number: Optional[str] = None
+    role: RoleChoices = RoleChoices.buyer
+
+
 class UserProfileSchema(BaseModel):
     id: int
     username: str
