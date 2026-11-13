@@ -22,4 +22,6 @@ jobs:
       - name: Install minimal runtime smoke-test dependencies
         run: python -m pip install "SQLAlchemy>=2,<3" "python-dotenv>=1,<2"
       - name: Run security and isolated database smoke tests
-        run: python -m unittest discover -s tests -v
+        run: |
+          python -m unittest discover -s tests -p "test_security_config.py" -v
+          python -m unittest discover -s tests -p "test_database_runtime.py" -v
