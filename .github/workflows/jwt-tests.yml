@@ -20,8 +20,8 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install isolated test dependency
-        run: python -m pip install "python-jose[cryptography]>=3.3,<4"
+        run: python -m pip install "python-jose[cryptography]>=3.3,<4" "python-dotenv>=1,<2"
       - name: Validate modified authentication module
         run: python -m py_compile auction_app/api/endpoints/auth.py auction_app/token_security.py
       - name: Run JWT regression tests
-        run: python -m unittest discover -s tests -p "test_jwt_tokens.py" -v
+        run: python -m unittest discover -s tests -p "test_jwt*.py" -v
