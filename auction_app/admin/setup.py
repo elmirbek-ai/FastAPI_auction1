@@ -1,17 +1,19 @@
-"""SQLAdmin registration.
-
-Until a verified authentication backend is implemented, the administrative
-interface must not be exposed. This check is deliberately fail-closed.
-"""
-import os
+"""SQLAdmin is opt-in and always requires an authentication backend."""
+from auction_app.admin.auth import admin_from_environment
 
 
 def setup_admin(app):
-    enabled = os.getenv("ENABLE_SQLADMIN", "").strip().lower() in ("1", "true", "yes")
-    if enabled:
-        raise RuntimeError(
-            "SQLAdmin must not be enabled without an authenticated admin backend. "
-            "Implement and test admin authentication before enabling it."
-        )
-    # Intentionally do not mount the unauthenticated admin interface.
-    return None
+    backend = admin_from_environment()
+    if backend is None:
+        return None
+
+    from sqladmin import Admin
+    from auction_app.admin.view import (
+        UserProfileAdmin, CarAdmin, AuctionAdmin, BidAdmin, FeedbackAdmin
+    )
+    from auction_app.db.database import engine
+
+    admin = Admin(app, engine, authentication_backend=backend)
+    for view in (UserProfileAdmin, CarAdmin, AuctionAdmin, BidAdmin, FeedbackAdmin):
+        admin.add_view(view)
+    return admin
