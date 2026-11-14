@@ -10,8 +10,13 @@ from auction_app.db.schema import UserRegistrationSchema
 from auction_app.db.models import UserProfile, RefreshToken
 from fastapi import Depends, HTTPException, status, APIRouter
 from sqlalchemy.orm import Session
+from pydantic import BaseModel, Field
 
 auth_router = APIRouter(prefix='/auth')
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(min_length=1)
+
 
 oauth2_schema = OAuth2PasswordBearer(tokenUrl='/auth/login/')
 password_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
@@ -88,7 +93,8 @@ async def login(from_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
 
 
 @auth_router.post('/logout', tags=['Авторизация'], summary='выход из системы')
-async def logout(refresh_token: str, db: Session = Depends(get_db)):
+async def logout(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
+    refresh_token = payload.refresh_token
     stored_token = db.query(RefreshToken).filter(RefreshToken.token == refresh_token).first()
     if not stored_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Маалымат туура эмес')
@@ -98,7 +104,8 @@ async def logout(refresh_token: str, db: Session = Depends(get_db)):
 
 
 @auth_router.post('/refresh/', tags=['Авторизация'], summary='Рефреш токен')
-async def refresh(refresh_token: str, db: Session = Depends(get_db)):
+async def refresh(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
+    refresh_token = payload.refresh_token
     token_entry = db.query(RefreshToken).filter(RefreshToken.token == refresh_token).first()
     if not token_entry:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Маалымат туура эмес')
