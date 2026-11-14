@@ -19,9 +19,10 @@ test_db = Path(test_dir.name) / "auth.sqlite3"
 os.environ["DATABASE_URL"] = "sqlite+pysqlite:///" + test_db.as_posix()
 os.environ["SECRET_KEY"] = "test-only-signing-key-not-for-production-12345678"
 
-from auction_app.api.endpoints import auth  # noqa: E402
+from auction_app.api.endpoints import auth, car, auction, bid, feedback  # noqa: E402
 from auction_app.db.database import Base, engine, SessionLocal  # noqa: E402
 from auction_app.db import models  # noqa: F401,E402
+from datetime import datetime, timezone  # noqa: E402
 
 
 class AuthenticationFlowTests(unittest.TestCase):
@@ -36,6 +37,10 @@ class AuthenticationFlowTests(unittest.TestCase):
         application.post("/auth/login")(auth.login)
         application.post("/auth/refresh/")(auth.refresh)
         application.post("/auth/logout")(auth.logout)
+        application.include_router(car.car_router)
+        application.include_router(auction.auction_router)
+        application.include_router(bid.bid_router)
+        application.include_router(feedback.feedback_router)
 
         def local_db():
             with cls.Session() as session:
@@ -70,6 +75,68 @@ class AuthenticationFlowTests(unittest.TestCase):
             "/auth/login",
             data={"username": "testuser", "password": password},
         )
+
+    def test_all_mutation_routes_require_access_token(self):
+        # No request body is needed for deletes; this distinguishes auth failures
+        # from body validation errors.
+        for route in ("/car/777", "/auction/777", "/bid/777", "/feedback/777"):
+            response = self.client.delete(route)
+            self.assertEqual(response.status_code, 401, (route, response.text))
+
+    def test_invalid_refresh_token_cannot_authorize_write(self):
+        response = self.client.delete(
+            "/car/777",
+            headers={"Authorization": "Bearer malformed-token"},
+        )
+        self.assertEqual(response.status_code, 401, response.text)
+
+    def test_refresh_jwt_cannot_authorize_write(self):
+        self.assertEqual(self.register().status_code, 200)
+        refresh_token = self.login().json()["refresh_token"]
+        response = self.client.delete(
+            "/car/777",
+            headers={"Authorization": f"Bearer {refresh_token}"},
+        )
+        self.assertEqual(response.status_code, 401, response.text)
+
+    def test_authenticated_user_cannot_delete_another_sellers_car(self):
+        with self.Session() as db:
+            owner = models.UserProfile(
+                username="seller_owner",
+                email="seller-owner@example.com",
+                hashed_password="not-used-in-this-test",
+                role=models.RoleChoices.seller,
+            )
+            other = models.UserProfile(
+                username="other_seller",
+                email="other-seller@example.com",
+                hashed_password="not-used-in-this-test",
+                role=models.RoleChoices.seller,
+            )
+            db.add_all([owner, other])
+            db.flush()
+            vehicle = models.Car(
+                brand="Test", model="Car", year=datetime(2024, 1, 1),
+                fuel_type=models.FuelType.petrol,
+                transmission=models.Transmission.auto,
+                mileage=100, price=1000,
+                description="Isolated test vehicle", image="test-image",
+                seller_id=owner.id,
+            )
+            db.add(vehicle)
+            db.commit()
+            db.refresh(vehicle)
+            car_id = vehicle.id
+        access = auth.create_access_token({"sub": "other_seller"})
+        response = self.client.delete(
+            f"/car/{car_id}",
+            headers={"Authorization": f"Bearer {access}"},
+        )
+        self.assertEqual(response.status_code, 403, response.text)
+        with self.Session() as db:
+            self.assertIsNotNone(
+                db.query(models.Car).filter(models.Car.id == car_id).first()
+            )
 
     def test_register_login_refresh_logout(self):
         register = self.register()
