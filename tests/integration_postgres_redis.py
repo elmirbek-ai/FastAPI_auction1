@@ -112,6 +112,35 @@ class PostgreSQLRedisAuthenticationTests(unittest.TestCase):
         )
         self.assertEqual(reused.status_code, 401, reused.text)
 
+    def test_duplicate_account_constraints_return_409_in_postgres(self):
+        first = self.client.post(
+            "/auth/register/",
+            json={
+                "username": "unique_ci",
+                "email": "unique-ci@example.com",
+                "password": "IntegrationTest123!",
+            },
+        )
+        self.assertEqual(first.status_code, 200, first.text)
+        same_username = self.client.post(
+            "/auth/register/",
+            json={
+                "username": "unique_ci",
+                "email": "different-ci@example.com",
+                "password": "IntegrationTest123!",
+            },
+        )
+        self.assertEqual(same_username.status_code, 409, same_username.text)
+        same_email = self.client.post(
+            "/auth/register/",
+            json={
+                "username": "other_ci",
+                "email": "unique-ci@example.com",
+                "password": "IntegrationTest123!",
+            },
+        )
+        self.assertEqual(same_email.status_code, 409, same_email.text)
+
     def test_redis_rate_limit_applies_to_login(self):
         statuses = []
         for _ in range(7):
