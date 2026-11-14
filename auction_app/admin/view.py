@@ -3,7 +3,15 @@ from auction_app.db.models import UserProfile, Car, Auction, Bid, Feedback
 
 
 class UserProfileAdmin(ModelView, model=UserProfile):
+    # Read-only overview: never expose raw password hashes or allow account
+    # credentials/roles to be overwritten through automatically generated forms.
     column_list = [UserProfile.id, UserProfile.username]
+    column_details_list = [UserProfile.id, UserProfile.username]
+    can_create = False
+    can_edit = False
+    can_delete = False
+    can_export = False
+    can_import = False
     name = 'User'
     name_plural = 'Users'
 

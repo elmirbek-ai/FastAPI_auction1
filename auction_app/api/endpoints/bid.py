@@ -1,5 +1,7 @@
 from typing import List
 from fastapi import Depends, HTTPException, APIRouter
+from auction_app.authentication import get_current_user
+from auction_app.db.models import UserProfile
 from sqlalchemy.orm import Session
 from auction_app.db.database import SessionLocal
 from auction_app.db.models import Bid
@@ -17,10 +19,10 @@ async def get_db():
 
 # Create a new bid
 @bid_router.post('/', response_model=BidSchema, summary='Создать ставку')
-async def create_bid(bid: BidSchema, db: Session = Depends(get_db)):
+async def create_bid(bid: BidSchema, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
     bid_db = Bid(
         auction_id=bid.auction_id,
-        user_id=bid.user_id,
+        user_id=user.id,
         amount=bid.amount,
         date_registered=bid.date_registered
     )
@@ -45,12 +47,14 @@ async def bid_detail(bid_id: int, db: Session = Depends(get_db)):
 
 # Delete a bid
 @bid_router.delete('/{bid_id}', summary='Удалить ставку')
-async def bid_delete(bid_id: int, db: Session = Depends(get_db)):
+async def bid_delete(bid_id: int, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
     bid_db = db.query(Bid).filter(Bid.id == bid_id).first()
 
     if bid_db is None:
         raise HTTPException(status_code=404, detail='Ставка не найдена')
 
+    if bid_db.user_id != user.id:
+        raise HTTPException(status_code=403, detail='Not the owner of this bid')
     db.delete(bid_db)
     db.commit()
     return {'message': 'Ставка удалена'}
