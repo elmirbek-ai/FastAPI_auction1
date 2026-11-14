@@ -107,6 +107,30 @@ class AuthenticationFlowTests(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 422, response.text)
 
+    def test_duplicate_username_returns_conflict(self):
+        self.assertEqual(self.register().status_code, 200)
+        again = self.register()
+        self.assertEqual(again.status_code, 409, again.text)
+
+    def test_duplicate_email_returns_conflict_without_creating_account(self):
+        self.assertEqual(self.register().status_code, 200)
+        result = self.client.post(
+            "/auth/register/",
+            json={
+                "username": "anotheruser",
+                "email": "test@example.com",
+                "password": "AnotherPassword123!",
+            },
+        )
+        self.assertEqual(result.status_code, 409, result.text)
+        self.assertEqual(
+            self.client.post(
+                "/auth/login",
+                data={"username": "anotheruser", "password": "AnotherPassword123!"},
+            ).status_code,
+            401,
+        )
+
     def test_bad_password_is_rejected(self):
         self.assertEqual(self.register().status_code, 200)
         bad = self.login(password="incorrect-password")
