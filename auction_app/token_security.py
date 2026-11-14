@@ -1,5 +1,6 @@
 """Signed JWT token issuance and strict refresh-token validation."""
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 from jose import JWTError, jwt
 
@@ -22,6 +23,7 @@ def issue_token(
         {
             "sub": str(subject),
             "type": token_type,
+            "jti": uuid4().hex,
             "exp": datetime.now(timezone.utc) + lifetime,
         },
         secret_key,
