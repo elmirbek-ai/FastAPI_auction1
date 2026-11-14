@@ -86,15 +86,29 @@ class AuthenticationFlowTests(unittest.TestCase):
         )
         self.assertEqual(refresh.status_code, 200, refresh.text)
         self.assertIn("access_token", refresh.json())
+        rotated_token = refresh.json()["refresh_token"]
+        self.assertNotEqual(rotated_token, tokens["refresh_token"])
+        self.assertEqual(
+            self.client.post(
+                "/auth/refresh/",
+                json={"refresh_token": tokens["refresh_token"]},
+            ).status_code,
+            401,
+        )
+        again = self.client.post(
+            "/auth/refresh/", json={"refresh_token": rotated_token}
+        )
+        self.assertEqual(again.status_code, 200, again.text)
+        rotated_token = again.json()["refresh_token"]
 
         logout = self.client.post(
             "/auth/logout",
-            json={"refresh_token": tokens["refresh_token"]},
+            json={"refresh_token": rotated_token},
         )
         self.assertEqual(logout.status_code, 200, logout.text)
         reused = self.client.post(
             "/auth/refresh/",
-            json={"refresh_token": tokens["refresh_token"]},
+            json={"refresh_token": rotated_token},
         )
         self.assertEqual(reused.status_code, 401, reused.text)
 
