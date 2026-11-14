@@ -40,6 +40,13 @@ class SecurityConfigurationTests(unittest.TestCase):
         self.assertIn("len(session_secret) < 32", content)
         self.assertNotIn("secret_key='SECRET_KEY'", content)
 
+    def test_session_secret_placeholder_is_rejected(self):
+        source = (ROOT / "auction_app/main.py").read_text(encoding="utf-8")
+        self.assertIn(
+            'session_secret == "REPLACE_WITH_A_RANDOM_SECRET_AT_LEAST_32_CHARACTERS"',
+            source,
+        )
+
     def test_python_modules_compile(self):
         for path in (ROOT / "auction_app").rglob("*.py"):
             with self.subTest(file=str(path.relative_to(ROOT))):
