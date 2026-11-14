@@ -1,15 +1,17 @@
-from fastapi import FastAPI
-from sqladmin import Admin
-from auction_app.admin.view import UserProfileAdmin, CarAdmin, AuctionAdmin, BidAdmin, FeedbackAdmin
-from auction_app.db.database import engine
+"""SQLAdmin registration.
+
+Until a verified authentication backend is implemented, the administrative
+interface must not be exposed. This check is deliberately fail-closed.
+"""
+import os
 
 
-def setup_admin(app: FastAPI):
-    admin = Admin(app, engine)
-    admin.add_view(UserProfileAdmin)
-    admin.add_view(CarAdmin)
-    admin.add_view(AuctionAdmin)
-    admin.add_view(BidAdmin)
-    admin.add_view(FeedbackAdmin)
-
-
+def setup_admin(app):
+    enabled = os.getenv("ENABLE_SQLADMIN", "").strip().lower() in ("1", "true", "yes")
+    if enabled:
+        raise RuntimeError(
+            "SQLAdmin must not be enabled without an authenticated admin backend. "
+            "Implement and test admin authentication before enabling it."
+        )
+    # Intentionally do not mount the unauthenticated admin interface.
+    return None
