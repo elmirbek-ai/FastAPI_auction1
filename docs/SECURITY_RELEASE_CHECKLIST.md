@@ -19,8 +19,9 @@ Review and merge **PR #4** rather than merging #2 and #3 separately.
       secrets. Changing current source files does **not** remove Git history.
 - [ ] Review how login, refresh, and logout are consumed by existing clients.
       The registration input schema changed; old refresh tokens are invalidated.
-- [ ] Refactor refresh/logout inputs to avoid transmitting bearer tokens in URL
-      query parameters; proxy/access logs may otherwise retain those tokens.
+- [x] Refresh/logout now accept a JSON body rather than URL query credentials.
+      Update every API client to send `{"refresh_token":"..."}` in the body.
+      Old query-only clients now receive HTTP 422; confirm rollout compatibility.
 - [ ] Enforce HTTPS, secure session cookies, admin network restrictions,
       audit logs and a strong operational admin credential policy.
 - [ ] Review RBAC, admin forms, duplicate username/email handling, recovery
