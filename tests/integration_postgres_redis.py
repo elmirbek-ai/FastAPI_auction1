@@ -97,18 +97,18 @@ class PostgreSQLRedisAuthenticationTests(unittest.TestCase):
 
         refresh = self.client.post(
             "/auth/refresh/",
-            params={"refresh_token": tokens["refresh_token"]},
+            json={"refresh_token": tokens["refresh_token"]},
         )
         self.assertEqual(refresh.status_code, 200, refresh.text)
 
         logout = self.client.post(
             "/auth/logout",
-            params={"refresh_token": tokens["refresh_token"]},
+            json={"refresh_token": tokens["refresh_token"]},
         )
         self.assertEqual(logout.status_code, 200, logout.text)
         reused = self.client.post(
             "/auth/refresh/",
-            params={"refresh_token": tokens["refresh_token"]},
+            json={"refresh_token": tokens["refresh_token"]},
         )
         self.assertEqual(reused.status_code, 401, reused.text)
 
