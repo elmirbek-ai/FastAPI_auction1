@@ -141,6 +141,30 @@ class PostgreSQLRedisAuthenticationTests(unittest.TestCase):
         )
         self.assertEqual(same_email.status_code, 409, same_email.text)
 
+    def test_registration_rate_limit_enforced(self):
+        statuses = []
+        for _ in range(7):
+            response = self.client.post(
+                "/auth/register/",
+                json={
+                    "username": "x",
+                    "email": "bad-email",
+                    "password": "short",
+                },
+            )
+            statuses.append(response.status_code)
+        self.assertIn(429, statuses, statuses)
+
+    def test_refresh_rate_limit_enforced(self):
+        statuses = []
+        for _ in range(12):
+            response = self.client.post(
+                "/auth/refresh/",
+                json={"refresh_token": "unknown-invalid-ci-token"},
+            )
+            statuses.append(response.status_code)
+        self.assertIn(429, statuses, statuses)
+
     def test_redis_rate_limit_applies_to_login(self):
         statuses = []
         for _ in range(7):
