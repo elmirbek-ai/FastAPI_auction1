@@ -142,5 +142,27 @@ async def refresh(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Refresh token колдонуучуга туура келбейт',
         )
+    # Rotate the persisted refresh token atomically. A conditional UPDATE makes
+    # replays of the old token fail, including requests racing concurrently.
+    new_refresh_token = create_refresh_token({'sub': username})
+    updated = (
+        db.query(RefreshToken)
+        .filter(
+            RefreshToken.id == token_entry.id,
+            RefreshToken.token == refresh_token,
+        )
+        .update({RefreshToken.token: new_refresh_token}, synchronize_session=False)
+    )
+    if updated != 1:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Refresh token already used or revoked',
+        )
+    db.commit()
     access_token = create_access_token({'sub': username})
-    return {'access_token': access_token, 'token_type': 'bearer'}
+    return {
+        'access_token': access_token,
+        'refresh_token': new_refresh_token,
+        'token_type': 'bearer',
+    }
