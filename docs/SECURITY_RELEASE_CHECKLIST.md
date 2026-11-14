@@ -25,10 +25,15 @@ Review and merge **PR #4** rather than merging #2 and #3 separately.
 - [x] Refresh/logout now accept a JSON body rather than URL query credentials.
       Update every API client to send `{"refresh_token":"..."}` in the body.
       Old query-only clients now receive HTTP 422; confirm rollout compatibility.
-- [ ] Enforce HTTPS, secure session cookies, admin network restrictions,
-      audit logs and a strong operational admin credential policy.
-- [ ] Review RBAC, admin forms, duplicate username/email handling, recovery
-      processes, and API error responses.
+- [ ] Configure HTTPS termination, APP_ENV=production, explicit ALLOWED_HOSTS,
+      admin network restrictions, audit logs and strong administrator credentials.
+      Production sets Secure session cookies and validates Host headers, but
+      TLS enforcement must also be verified at the reverse proxy.
+- [ ] Review RBAC and object ownership end-to-end. Car/auction/bid/feedback
+      writes now require JWT authentication and owner checks, but workflows,
+      bid rules, role transitions and business validation need full testing.
+- [ ] Verify frontend/API consumers send access Bearer tokens for write routes;
+      unauthenticated writes now return HTTP 401.
 - [ ] Test the intended production dependency versions and startup/deployment
       configuration. CI is deliberately limited to selected supported versions.
 - [ ] Check clean and existing-database migration paths and make a backup
@@ -43,5 +48,7 @@ Review and merge **PR #4** rather than merging #2 and #3 separately.
 - PR #3 changes are included in PR #4; do not merge it separately.
 - Close old drafts only after confirming the merged implementation and preserving
   any review discussion or useful comments.
+
+- [ ] Verify that read-only user schemas never return password hashes.
 
 CI passing is not an assertion that this application is production-ready.
