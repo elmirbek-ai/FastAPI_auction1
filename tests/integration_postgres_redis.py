@@ -84,6 +84,17 @@ class PostgreSQLRedisAuthenticationTests(unittest.TestCase):
         self.assertIn("access_token", tokens)
         self.assertIn("refresh_token", tokens)
 
+        # A second immediate login must create a distinct persisted refresh
+        # token rather than violating the database unique constraint.
+        repeat = self.client.post(
+            "/auth/login",
+            data={"username": "pg_ci_user", "password": "IntegrationTest123!"},
+        )
+        self.assertEqual(repeat.status_code, 200, repeat.text)
+        self.assertNotEqual(
+            repeat.json()["refresh_token"], tokens["refresh_token"]
+        )
+
         refresh = self.client.post(
             "/auth/refresh/",
             params={"refresh_token": tokens["refresh_token"]},
