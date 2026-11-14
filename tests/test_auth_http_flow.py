@@ -82,21 +82,30 @@ class AuthenticationFlowTests(unittest.TestCase):
 
         refresh = self.client.post(
             "/auth/refresh/",
-            params={"refresh_token": tokens["refresh_token"]},
+            json={"refresh_token": tokens["refresh_token"]},
         )
         self.assertEqual(refresh.status_code, 200, refresh.text)
         self.assertIn("access_token", refresh.json())
 
         logout = self.client.post(
             "/auth/logout",
-            params={"refresh_token": tokens["refresh_token"]},
+            json={"refresh_token": tokens["refresh_token"]},
         )
         self.assertEqual(logout.status_code, 200, logout.text)
         reused = self.client.post(
             "/auth/refresh/",
-            params={"refresh_token": tokens["refresh_token"]},
+            json={"refresh_token": tokens["refresh_token"]},
         )
         self.assertEqual(reused.status_code, 401, reused.text)
+
+    def test_refresh_and_logout_reject_query_only_tokens(self):
+        self.assertEqual(self.register().status_code, 200)
+        tokens = self.login().json()
+        for route in ("/auth/refresh/", "/auth/logout"):
+            response = self.client.post(
+                route, params={"refresh_token": tokens["refresh_token"]}
+            )
+            self.assertEqual(response.status_code, 422, response.text)
 
     def test_bad_password_is_rejected(self):
         self.assertEqual(self.register().status_code, 200)
@@ -113,7 +122,7 @@ class AuthenticationFlowTests(unittest.TestCase):
     def test_refresh_token_must_be_persisted(self):
         self.assertEqual(self.register().status_code, 200)
         token = auth.create_refresh_token({"sub": "testuser"})
-        result = self.client.post("/auth/refresh/", params={"refresh_token": token})
+        result = self.client.post("/auth/refresh/", json={"refresh_token": token})
         self.assertEqual(result.status_code, 401, result.text)
 
 
