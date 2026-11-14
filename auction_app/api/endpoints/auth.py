@@ -59,7 +59,12 @@ def get_password_hash(password):
     return password_context.hash(password)
 
 
-@auth_router.post('/register/', tags=['Авторизация'], summary='Регистрация')
+@auth_router.post(
+    '/register/',
+    dependencies=[Depends(RateLimiter(times=5, seconds=180))],
+    tags=['Авторизация'],
+    summary='Регистрация',
+)
 async def register(user: UserRegistrationSchema, db: Session = Depends(get_db)):
     if db.query(UserProfile.id).filter(UserProfile.username == user.username).first():
         raise HTTPException(status_code=409, detail="Username already registered")
@@ -112,7 +117,12 @@ async def logout(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
     return {'message': 'Вышли'}
 
 
-@auth_router.post('/refresh/', tags=['Авторизация'], summary='Рефреш токен')
+@auth_router.post(
+    '/refresh/',
+    dependencies=[Depends(RateLimiter(times=10, seconds=180))],
+    tags=['Авторизация'],
+    summary='Рефреш токен',
+)
 async def refresh(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
     refresh_token = payload.refresh_token
     token_entry = db.query(RefreshToken).filter(RefreshToken.token == refresh_token).first()
