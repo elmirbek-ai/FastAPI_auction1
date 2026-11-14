@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi_limiter import FastAPILimiter
 from fastapi_pagination import add_pagination
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from auction_app.admin.setup import setup_admin
 from auction_app.api.endpoints import auth, car, auction, bid, feedback
@@ -51,7 +52,26 @@ if (
     )
 
 auction_app = fastapi.FastAPI(title="Auction site", lifespan=lifespan)
-auction_app.add_middleware(SessionMiddleware, secret_key=session_secret)
+# Secure session cookies and deny arbitrary Host headers in production.
+is_production = os.getenv("APP_ENV", "development").lower() == "production"
+allowed_hosts = [
+    host.strip()
+    for host in os.getenv("ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+]
+if is_production and (not allowed_hosts or "*" in allowed_hosts):
+    raise RuntimeError("ALLOWED_HOSTS must list explicit hosts in production")
+if is_production:
+    auction_app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=allowed_hosts,
+    )
+auction_app.add_middleware(
+    SessionMiddleware,
+    secret_key=session_secret,
+    https_only=is_production,
+    same_site="lax",
+)
 
 setup_admin(auction_app)
 add_pagination(auction_app)
