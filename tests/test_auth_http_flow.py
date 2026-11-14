@@ -138,6 +138,71 @@ class AuthenticationFlowTests(unittest.TestCase):
                 db.query(models.Car).filter(models.Car.id == car_id).first()
             )
 
+    def test_bid_creator_cannot_impersonate_another_user(self):
+        with self.Session() as db:
+            seller = models.UserProfile(
+                username="auction_seller",
+                email="auction-seller@example.com",
+                hashed_password="unused-test-hash",
+                role=models.RoleChoices.seller,
+            )
+            buyer = models.UserProfile(
+                username="auction_buyer",
+                email="auction-buyer@example.com",
+                hashed_password="unused-test-hash",
+                role=models.RoleChoices.buyer,
+            )
+            db.add_all([seller, buyer])
+            db.flush()
+            car = models.Car(
+                brand="Test", model="Vehicle", year=datetime(2024, 1, 1),
+                fuel_type=models.FuelType.petrol,
+                transmission=models.Transmission.auto,
+                mileage=123, price=1000,
+                description="Test car", image="test.jpg",
+                seller_id=seller.id,
+            )
+            db.add(car)
+            db.flush()
+            sale = models.Auction(
+                car_id=car.id,
+                start_price=1000,
+                start_time=datetime(2024, 1, 1),
+                end_time=datetime(2030, 1, 1),
+                status=models.StatusCar.active,
+            )
+            db.add(sale)
+            db.commit()
+            db.refresh(sale)
+            auction_id, seller_id, buyer_id = sale.id, seller.id, buyer.id
+
+        buyer_access = auth.create_access_token({"sub": "auction_buyer"})
+        created = self.client.post(
+            "/bid/",
+            headers={"Authorization": f"Bearer {buyer_access}"},
+            json={
+                "id": 777,
+                "auction_id": auction_id,
+                "user_id": seller_id,
+                "amount": 1200,
+                "date_registered": "2026-11-14T12:00:00",
+            },
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        self.assertEqual(created.json()["user_id"], buyer_id)
+        bid_id = created.json()["id"]
+        seller_access = auth.create_access_token({"sub": "auction_seller"})
+        denied = self.client.delete(
+            f"/bid/{bid_id}",
+            headers={"Authorization": f"Bearer {seller_access}"},
+        )
+        self.assertEqual(denied.status_code, 403, denied.text)
+        deleted = self.client.delete(
+            f"/bid/{bid_id}",
+            headers={"Authorization": f"Bearer {buyer_access}"},
+        )
+        self.assertEqual(deleted.status_code, 200, deleted.text)
+
     def test_register_login_refresh_logout(self):
         register = self.register()
         self.assertEqual(register.status_code, 200, register.text)
