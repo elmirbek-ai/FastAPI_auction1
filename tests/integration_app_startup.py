@@ -1,5 +1,7 @@
 """Full app startup smoke checks against disposable CI PostgreSQL and Redis."""
 import os
+import subprocess
+import sys
 import unittest
 
 from fastapi.testclient import TestClient
@@ -31,6 +33,17 @@ class FullApplicationStartupTests(unittest.TestCase):
             os.environ.pop("ADMIN_PASSWORD_HASH", None)
             with self.assertRaisesRegex(RuntimeError, "ADMIN_USERNAME"):
                 setup_admin(FastAPI())
+
+    def test_production_rejects_missing_host_allowlist(self):
+        env = dict(os.environ)
+        env["APP_ENV"] = "production"
+        env.pop("ALLOWED_HOSTS", None)
+        result = subprocess.run(
+            [sys.executable, "-c", "import auction_app.main"],
+            env=env, capture_output=True, text=True, check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ALLOWED_HOSTS", result.stderr)
 
     def test_admin_login_protected_by_hashed_credentials(self):
         from starlette.middleware.sessions import SessionMiddleware
