@@ -16,7 +16,6 @@ class UserProfileSchema(BaseModel):
     id: int
     username: str
     email: EmailStr
-    hashed_password: str
     phone_number: Optional[str]
     role: RoleChoices
     date_registered: datetime
