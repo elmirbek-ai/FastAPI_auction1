@@ -41,7 +41,11 @@ async def get_db():
 
 
 session_secret = os.getenv("SESSION_SECRET_KEY")
-if not session_secret or len(session_secret) < 32:
+if (
+    not session_secret
+    or len(session_secret) < 32
+    or session_secret == "REPLACE_WITH_A_RANDOM_SECRET_AT_LEAST_32_CHARACTERS"
+):
     raise RuntimeError(
         "SESSION_SECRET_KEY must be a random secret of at least 32 characters"
     )
