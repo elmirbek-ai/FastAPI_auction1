@@ -8,7 +8,7 @@ Review and merge **PR #4** rather than merging #2 and #3 separately.
 - Environment-backed DB and signing key validation
 - SQLAlchemy smoke tests
 - JWT signature/type/expiry checks and unique JWT IDs
-- Registration, login, refresh and logout tests
+- Registration, login, one-time refresh token rotation and logout tests
 - Two immediate logins without a duplicate refresh-token database error
 - PostgreSQL 16, Redis 7, rate limiter, and Alembic upgrade/check
 - FastAPI app startup and SQLAdmin login/logout
@@ -19,6 +19,9 @@ Review and merge **PR #4** rather than merging #2 and #3 separately.
       secrets. Changing current source files does **not** remove Git history.
 - [ ] Review how login, refresh, and logout are consumed by existing clients.
       The registration input schema changed; old refresh tokens are invalidated.
+      Every successful refresh now rotates the refresh token; clients must
+      replace their stored token with the new `refresh_token` in the response.
+      Reuse of the old token returns HTTP 401. This change is breaking.
 - [x] Refresh/logout now accept a JSON body rather than URL query credentials.
       Update every API client to send `{"refresh_token":"..."}` in the body.
       Old query-only clients now receive HTTP 422; confirm rollout compatibility.
