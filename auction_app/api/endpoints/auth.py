@@ -10,6 +10,7 @@ from auction_app.db.schema import UserRegistrationSchema
 from auction_app.db.models import UserProfile, RefreshToken
 from fastapi import Depends, HTTPException, status, APIRouter
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, Field
 
 auth_router = APIRouter(prefix='/auth')
@@ -60,22 +61,30 @@ def get_password_hash(password):
 
 @auth_router.post('/register/', tags=['Авторизация'], summary='Регистрация')
 async def register(user: UserRegistrationSchema, db: Session = Depends(get_db)):
-    user_db = db.query(UserProfile).filter(UserProfile.username == user.username).first()
-    if user_db:
-        raise HTTPException(status_code=400, detail='username бар экен')
-    new_hash_pass = get_password_hash(user.password)
+    if db.query(UserProfile.id).filter(UserProfile.username == user.username).first():
+        raise HTTPException(status_code=409, detail="Username already registered")
+    if db.query(UserProfile.id).filter(UserProfile.email == user.email).first():
+        raise HTTPException(status_code=409, detail="Email already registered")
+
     new_user = UserProfile(
         username=user.username,
         email=user.email,
         phone_number=user.phone_number,
         role=user.role,
-        hashed_password=new_hash_pass
+        hashed_password=get_password_hash(user.password),
     )
-
-    db.add(new_user)
-    db.commit()
+    try:
+        db.add(new_user)
+        db.commit()
+    except IntegrityError as exc:
+        # The unique constraints remain the final authority when two
+        # registrations race after the explicit checks above.
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail="Username or email already registered"
+        ) from exc
     db.refresh(new_user)
-    return {'message': 'User successfully registered'}
+    return {"message": "User successfully registered"}
 
 
 @auth_router.post('/login', dependencies=[Depends(RateLimiter(times=5, seconds=180))],
