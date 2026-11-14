@@ -1,0 +1,43 @@
+# Security release review checklist
+
+This branch consolidates the earlier security PR #2 and JWT/auth PR #3.
+Review and merge **PR #4** rather than merging #2 and #3 separately.
+
+## Verified by CI (disposable infrastructure)
+
+- Environment-backed DB and signing key validation
+- SQLAlchemy smoke tests
+- JWT signature/type/expiry checks and unique JWT IDs
+- Registration, login, refresh and logout tests
+- Two immediate logins without a duplicate refresh-token database error
+- PostgreSQL 16, Redis 7, rate limiter, and Alembic upgrade/check
+- FastAPI app startup and SQLAdmin login/logout
+
+## Required before production
+
+- [ ] Rotate potentially exposed PostgreSQL, JWT/session, Redis or OAuth/API
+      secrets. Changing current source files does **not** remove Git history.
+- [ ] Review how login, refresh, and logout are consumed by existing clients.
+      The registration input schema changed; old refresh tokens are invalidated.
+- [ ] Refactor refresh/logout inputs to avoid transmitting bearer tokens in URL
+      query parameters; proxy/access logs may otherwise retain those tokens.
+- [ ] Enforce HTTPS, secure session cookies, admin network restrictions,
+      audit logs and a strong operational admin credential policy.
+- [ ] Review RBAC, admin forms, duplicate username/email handling, recovery
+      processes, and API error responses.
+- [ ] Test the intended production dependency versions and startup/deployment
+      configuration. CI is deliberately limited to selected supported versions.
+- [ ] Check clean and existing-database migration paths and make a backup
+      before production migration. CI tests a disposable fresh database.
+- [ ] Verify required branch protections, reviews and operational monitoring.
+
+## PR cleanup (after final acceptance)
+
+- Keep **PR #4** as the sole integration candidate.
+- Keep PR #1 (documentation) separate, because it affects only README.
+- PR #2 is an ancestor of PR #4 and should not be merged separately.
+- PR #3 changes are included in PR #4; do not merge it separately.
+- Close old drafts only after confirming the merged implementation and preserving
+  any review discussion or useful comments.
+
+CI passing is not an assertion that this application is production-ready.
