@@ -21,6 +21,21 @@ class TokenValidationTests(unittest.TestCase):
             "alice",
         )
 
+    def test_two_refresh_tokens_in_same_second_are_distinct(self):
+        first = issue_token(
+            "alice", token_type="refresh", secret_key=KEY,
+            algorithm=ALGORITHM, lifetime=timedelta(minutes=10),
+        )
+        second = issue_token(
+            "alice", token_type="refresh", secret_key=KEY,
+            algorithm=ALGORITHM, lifetime=timedelta(minutes=10),
+        )
+        self.assertNotEqual(first, second)
+        claims_a = jwt.decode(first, KEY, algorithms=[ALGORITHM])
+        claims_b = jwt.decode(second, KEY, algorithms=[ALGORITHM])
+        self.assertNotEqual(claims_a["jti"], claims_b["jti"])
+        self.assertEqual(validate_refresh_token(second, secret_key=KEY, algorithm=ALGORITHM), "alice")
+
     def test_access_token_cannot_be_used_for_refresh(self):
         token = issue_token(
             "alice", token_type="access", secret_key=KEY,
