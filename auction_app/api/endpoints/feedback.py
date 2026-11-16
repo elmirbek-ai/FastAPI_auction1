@@ -5,7 +5,7 @@ from auction_app.db.models import UserProfile
 from sqlalchemy.orm import Session
 from auction_app.db.database import SessionLocal
 from auction_app.db.models import Feedback
-from auction_app.db.schema import FeedbackSchema
+from auction_app.db.schema import FeedbackSchema, FeedbackWriteSchema
 
 feedback_router = APIRouter(prefix='/feedback', tags=['Feedback'])
 
@@ -19,13 +19,12 @@ async def get_db():
 
 # Create a new feedback
 @feedback_router.post('/', response_model=FeedbackSchema, summary='Создать отзыв')
-async def create_feedback(feedback: FeedbackSchema, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
+async def create_feedback(feedback: FeedbackWriteSchema, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
     feedback_db = Feedback(
         seller_feedback_id=feedback.seller_feedback_id,
         bayer_id=user.id,
         rating=feedback.rating,
         text=feedback.text,
-        create_date=feedback.create_date
     )
     db.add(feedback_db)
     db.commit()
