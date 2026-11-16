@@ -229,6 +229,17 @@ class PostgreSQLRedisAuthenticationTests(unittest.TestCase):
             ).status_code, 409,
         )
 
+    @staticmethod
+    def isolated_auction_client():
+        # Each worker creates its own TestClient and AnyIO portal/event loop.
+        # Sharing a single context-managed TestClient would serialize async
+        # handlers and mask database races.
+        app = FastAPI()
+        app.include_router(bid.bid_router)
+        app.include_router(auction.auction_router)
+        app.include_router(car.car_router)
+        return TestClient(app)
+
     def test_parallel_equal_bids_only_one_wins_in_postgres(self):
         """Two independent requests must not accept the same highest offer."""
         now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -274,14 +285,18 @@ class PostgreSQLRedisAuthenticationTests(unittest.TestCase):
             db.commit()
             auction_id = auction.id
 
+        from threading import Barrier
+        barrier = Barrier(2, timeout=10)
+
         def place_bid(username):
             token = create_access_token({"sub": username})
-            # Each request resolves its own DB connection/session.
-            return self.client.post(
-                "/bid/",
-                headers={"Authorization": f"Bearer {token}"},
-                json={"auction_id": auction_id, "amount": 150},
-            ).status_code
+            with self.isolated_auction_client() as client:
+                barrier.wait()
+                return client.post(
+                    "/bid/",
+                    headers={"Authorization": f"Bearer {token}"},
+                    json={"auction_id": auction_id, "amount": 150},
+                ).status_code
 
         with ThreadPoolExecutor(max_workers=2) as pool:
             responses = list(pool.map(
@@ -336,18 +351,25 @@ class PostgreSQLRedisAuthenticationTests(unittest.TestCase):
         seller_token = create_access_token({"sub": "delete_race_seller"})
         buyer_token = create_access_token({"sub": "delete_race_buyer"})
 
+        from threading import Barrier
+        barrier = Barrier(2, timeout=10)
+
         def bid_request():
-            return self.client.post(
-                "/bid/",
-                headers={"Authorization": f"Bearer {buyer_token}"},
-                json={"auction_id": auction_id, "amount": 150},
-            ).status_code
+            with self.isolated_auction_client() as client:
+                barrier.wait()
+                return client.post(
+                    "/bid/",
+                    headers={"Authorization": f"Bearer {buyer_token}"},
+                    json={"auction_id": auction_id, "amount": 150},
+                ).status_code
 
         def delete_request():
-            return self.client.delete(
-                f"/auction/{auction_id}",
-                headers={"Authorization": f"Bearer {seller_token}"},
-            ).status_code
+            with self.isolated_auction_client() as client:
+                barrier.wait()
+                return client.delete(
+                    f"/auction/{auction_id}",
+                    headers={"Authorization": f"Bearer {seller_token}"},
+                ).status_code
 
         with ThreadPoolExecutor(max_workers=2) as pool:
             bid_future = pool.submit(bid_request)
