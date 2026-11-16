@@ -45,6 +45,35 @@ class FullApplicationStartupTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("ALLOWED_HOSTS", result.stderr)
 
+    def test_session_and_jwt_secrets_must_be_independent(self):
+        env = dict(os.environ)
+        env["SESSION_SECRET_KEY"] = env["SECRET_KEY"]
+        result = subprocess.run(
+            [sys.executable, "-c", "import auction_app.main"],
+            env=env, capture_output=True, text=True, check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must be different", result.stderr)
+
+    def test_production_trusted_hosts_reject_unlisted_host(self):
+        env = dict(os.environ)
+        env["APP_ENV"] = "production"
+        env["ALLOWED_HOSTS"] = "auction.example.org"
+        script = (
+            "from auction_app.main import auction_app; "
+            "from fastapi.testclient import TestClient; "
+            "client = TestClient(auction_app); "
+            "a = client.get('/openapi.json', headers={'Host': 'bad.example.org'}); "
+            "b = client.get('/openapi.json', headers={'Host': 'auction.example.org'}); "
+            "assert a.status_code == 400, a.status_code; "
+            "assert b.status_code == 200, b.status_code"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            env=env, capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_admin_login_protected_by_hashed_credentials(self):
         from starlette.middleware.sessions import SessionMiddleware
         from auction_app.db.database import engine
