@@ -1,6 +1,6 @@
 from datetime import datetime, date
 from typing import Optional
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from auction_app.db.models import RoleChoices, FuelType, Transmission, StatusCar
 
 
@@ -46,6 +46,8 @@ class AuctionSchema(BaseModel):
 
 
 class BidCreateSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     auction_id: int = Field(gt=0)
     amount: int = Field(gt=0)
 
