@@ -54,8 +54,12 @@ Review and merge **PR #4** rather than merging #2 and #3 separately.
 - [ ] Run higher-concurrency, repeatable staging load tests with independent
       client sessions, realistic connection pools, and production-like latency.
       A two-request CI regression is not a full performance or race audit.
-- [ ] Review auction create/update/delete synchronization with competing bids
-      and confirm the application-level rules in end-to-end staging tests.
+- [x] Serialize car updates/deletes using PostgreSQL car-row locks, in the
+      same lock order used by auction creation; include an isolated PostgreSQL
+      integration check for updates under a competing lock.
+- [ ] Confirm auction create/update/delete, car modifications, and bids in
+      repeated staging races with realistic concurrent traffic and deadlock
+      observability. Current CI checks are targeted regression tests.
 - [ ] Verify frontend/API consumers send access Bearer tokens for write routes;
       unauthenticated writes now return HTTP 401.
 - [ ] Test the intended production dependency versions and startup/deployment
