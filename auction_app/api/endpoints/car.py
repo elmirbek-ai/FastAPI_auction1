@@ -109,7 +109,7 @@ async def car_delete(car_id: int, db: Session = Depends(get_db), user: UserProfi
         )
     db.delete(car_db)
     db.commit()
-    return {'message': 'Машина удалена'
+    return {'message': 'Машина удалена'}
 
 
 # Search for cars by brand, model, and fuel type
