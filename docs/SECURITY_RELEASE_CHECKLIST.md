@@ -49,9 +49,13 @@ Review and merge **PR #4** rather than merging #2 and #3 separately.
 - [ ] Confirm business policy for auction start-price strictness, bid increments,
       seller/buyer roles, cancellation, ties, clock behavior, completed auctions,
       payouts, disputes and audit retention before production.
-- [ ] Concurrency-test bids with multiple independent PostgreSQL connections.
-      The implementation locks the parent auction row, but CI does not stress
-      simultaneous bidder races at production load.
+- [x] Add a two-request PostgreSQL concurrency regression proving only one
+      identical highest bid can be accepted under the parent auction row lock.
+- [ ] Run higher-concurrency, repeatable staging load tests with independent
+      client sessions, realistic connection pools, and production-like latency.
+      A two-request CI regression is not a full performance or race audit.
+- [ ] Review auction create/update/delete synchronization with competing bids
+      and confirm the application-level rules in end-to-end staging tests.
 - [ ] Verify frontend/API consumers send access Bearer tokens for write routes;
       unauthenticated writes now return HTTP 401.
 - [ ] Test the intended production dependency versions and startup/deployment
