@@ -440,6 +440,54 @@ class AuthenticationFlowTests(unittest.TestCase):
         )
         self.assertEqual(result.status_code, 422, result.text)
 
+    def test_logout_rejects_stored_but_invalid_refresh_token(self):
+        from auction_app.db.models import RefreshToken, UserProfile
+        from auction_app.token_security import issue_token
+        from datetime import timedelta
+
+        self.assertEqual(self.register().status_code, 200)
+        with self.Session() as db:
+            user = db.query(UserProfile).filter(
+                UserProfile.username == "testuser"
+            ).one()
+            invalid_token = "not-a-signed-refresh-token"
+            db.add(RefreshToken(token=invalid_token, user_id=user.id))
+            mismatched_token = auth.create_refresh_token({"sub": "different-user"})
+            db.add(RefreshToken(token=mismatched_token, user_id=user.id))
+            db.commit()
+        for token in (invalid_token, mismatched_token):
+            response = self.client.post(
+                "/auth/logout", json={"refresh_token": token}
+            )
+            self.assertEqual(response.status_code, 401, response.text)
+            with self.Session() as db:
+                self.assertIsNotNone(db.query(RefreshToken).filter(
+                    RefreshToken.token == token
+                ).first())
+
+    def test_logout_rejects_expired_persisted_refresh_token(self):
+        from auction_app.db.models import RefreshToken, UserProfile
+        from auction_app.token_security import issue_token
+        from jose import jwt
+        from datetime import timedelta
+
+        self.assertEqual(self.register().status_code, 200)
+        token = jwt.encode(
+            {
+                "sub": "testuser", "type": "refresh",
+                "exp": datetime(2000, 1, 1),
+            },
+            auth.SECRET_KEY, algorithm=auth.ALGORITHM,
+        )
+        with self.Session() as db:
+            user = db.query(UserProfile).filter(
+                UserProfile.username == "testuser"
+            ).one()
+            db.add(RefreshToken(token=token, user_id=user.id))
+            db.commit()
+        response = self.client.post("/auth/logout", json={"refresh_token": token})
+        self.assertEqual(response.status_code, 401, response.text)
+
     def test_refresh_token_must_be_persisted(self):
         self.assertEqual(self.register().status_code, 200)
         token = auth.create_refresh_token({"sub": "testuser"})
