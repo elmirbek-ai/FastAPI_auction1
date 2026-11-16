@@ -72,7 +72,12 @@ async def car_update(car_id: int, car: CarWriteSchema, db: Session = Depends(get
         raise HTTPException(status_code=403, detail='Not the owner of this car')
 
     # Prevent retroactive changes to advertised details after bids are accepted.
-    auction_id = db.query(Auction.id).filter(Auction.car_id == car_db.id).scalar()
+    auction_id = (
+        db.query(Auction.id)
+        .filter(Auction.car_id == car_db.id)
+        .with_for_update()
+        .scalar()
+    )
     if auction_id is not None and db.query(Bid.id).filter(
         Bid.auction_id == auction_id
     ).first():
@@ -109,7 +114,12 @@ async def car_delete(car_id: int, db: Session = Depends(get_db), user: UserProfi
         raise HTTPException(status_code=403, detail='Not the owner of this car')
     # Deleting a car would cascade into its auction and placed bids.
     # Protect the auction record once bidding has started.
-    auction_id = db.query(Auction.id).filter(Auction.car_id == car_db.id).scalar()
+    auction_id = (
+        db.query(Auction.id)
+        .filter(Auction.car_id == car_db.id)
+        .with_for_update()
+        .scalar()
+    )
     if auction_id is not None and db.query(Bid.id).filter(
         Bid.auction_id == auction_id
     ).first():
