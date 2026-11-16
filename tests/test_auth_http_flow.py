@@ -284,6 +284,60 @@ class AuthenticationFlowTests(unittest.TestCase):
         )
         self.assertEqual(expired.status_code, 409, expired.text)
 
+    def test_auction_update_reassignment_conflict_returns_409(self):
+        with self.Session() as db:
+            seller = models.UserProfile(
+                username="reassign_seller",
+                email="reassign-seller@example.com",
+                hashed_password="unused",
+                role=models.RoleChoices.seller,
+            )
+            db.add(seller)
+            db.flush()
+            cars = [
+                models.Car(
+                    brand="Test", model="Car", year=datetime(2024, 1, 1),
+                    fuel_type=models.FuelType.petrol,
+                    transmission=models.Transmission.auto,
+                    mileage=1, price=1000, description="Test car",
+                    image="test.jpg", seller_id=seller.id,
+                )
+                for _ in range(2)
+            ]
+            db.add_all(cars)
+            db.flush()
+            sales = [
+                models.Auction(
+                    car_id=car.id, start_price=100,
+                    start_time=datetime(2024, 1, 1),
+                    end_time=datetime(2030, 1, 1),
+                    status=models.StatusCar.active,
+                )
+                for car in cars
+            ]
+            db.add_all(sales)
+            db.commit()
+            first_id, first_car_id, second_car_id = sales[0].id, cars[0].id, cars[1].id
+
+        token = auth.create_access_token({"sub": "reassign_seller"})
+        response = self.client.put(
+            f"/auction/{first_id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "car_id": second_car_id,
+                "start_price": 100,
+                "start_time": "2024-01-01T00:00:00",
+                "end_time": "2030-01-01T00:00:00",
+                "status": "active",
+            },
+        )
+        self.assertEqual(response.status_code, 409, response.text)
+        with self.Session() as db:
+            self.assertEqual(
+                db.query(models.Auction).filter(models.Auction.id == first_id)
+                .one().car_id, first_car_id,
+            )
+
     def test_auction_timezone_offsets_are_normalized_to_utc(self):
         from auction_app.db.schema import AuctionWriteSchema
         from pydantic import ValidationError
