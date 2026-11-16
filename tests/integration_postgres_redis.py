@@ -5,6 +5,7 @@ existing user/production database. No external APIs or production secrets.
 """
 import os
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
@@ -227,6 +228,71 @@ class PostgreSQLRedisAuthenticationTests(unittest.TestCase):
                 f"/car/{car_id}", headers=owner_headers,
             ).status_code, 409,
         )
+
+    def test_parallel_equal_bids_only_one_wins_in_postgres(self):
+        """Two independent requests must not accept the same highest offer."""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with SessionLocal() as db:
+            seller = models.UserProfile(
+                username="parallel_seller",
+                email="parallel-seller@example.com",
+                hashed_password="test-hash",
+                role=models.RoleChoices.seller,
+            )
+            buyer_a = models.UserProfile(
+                username="parallel_buyer_a",
+                email="parallel-buyer-a@example.com",
+                hashed_password="test-hash",
+                role=models.RoleChoices.buyer,
+            )
+            buyer_b = models.UserProfile(
+                username="parallel_buyer_b",
+                email="parallel-buyer-b@example.com",
+                hashed_password="test-hash",
+                role=models.RoleChoices.buyer,
+            )
+            db.add_all([seller, buyer_a, buyer_b])
+            db.flush()
+            vehicle = models.Car(
+                brand="Parallel", model="Bid Test", year=now,
+                fuel_type=models.FuelType.petrol,
+                transmission=models.Transmission.auto,
+                mileage=1, price=100,
+                description="Concurrent bidding test", image="test.jpg",
+                seller_id=seller.id,
+            )
+            db.add(vehicle)
+            db.flush()
+            auction = models.Auction(
+                car_id=vehicle.id,
+                start_price=100,
+                start_time=now - timedelta(minutes=5),
+                end_time=now + timedelta(minutes=5),
+                status=models.StatusCar.active,
+            )
+            db.add(auction)
+            db.commit()
+            auction_id = auction.id
+
+        def place_bid(username):
+            token = create_access_token({"sub": username})
+            # Each request resolves its own DB connection/session.
+            return self.client.post(
+                "/bid/",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"auction_id": auction_id, "amount": 150},
+            ).status_code
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            responses = list(pool.map(
+                place_bid, ("parallel_buyer_a", "parallel_buyer_b"),
+            ))
+        self.assertEqual(sorted(responses), [200, 409], responses)
+        with SessionLocal() as db:
+            accepted = db.query(models.Bid).filter(
+                models.Bid.auction_id == auction_id,
+            ).all()
+            self.assertEqual(len(accepted), 1)
 
     def test_registration_rate_limit_enforced(self):
         statuses = []
