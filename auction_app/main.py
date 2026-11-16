@@ -51,6 +51,12 @@ if (
         "SESSION_SECRET_KEY must be a random secret of at least 32 characters"
     )
 
+# The session cookie and JWT signing keys protect different trust domains.
+# Sharing one key increases the impact of a single disclosure.
+from auction_app.config import SECRET_KEY
+if session_secret == SECRET_KEY:
+    raise RuntimeError("SESSION_SECRET_KEY and SECRET_KEY must be different")
+
 auction_app = fastapi.FastAPI(title="Auction site", lifespan=lifespan)
 # Secure session cookies and deny arbitrary Host headers in production.
 is_production = os.getenv("APP_ENV", "development").lower() == "production"
