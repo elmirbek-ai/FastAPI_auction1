@@ -37,6 +37,11 @@ Review and merge **PR #4** rather than merging #2 and #3 separately.
 - [ ] Review RBAC and object ownership end-to-end. Car/auction/bid/feedback
       writes now require JWT authentication and owner checks, but workflows,
       bid rules, role transitions and business validation need full testing.
+- [ ] Update car, auction and feedback clients: request bodies now use
+      strict write schemas, rejecting database IDs, record ownership fields,
+      and server-generated timestamps. Car price must be positive; feedback
+      rating must be 1–5, with an existing seller target and no self-review.
+      These are breaking changes and require client contract testing.
 - [ ] Update bid clients: POST /bid/ now accepts only `auction_id` and
       `amount` (positive integer); bidder and bid timestamp are server-owned.
       Closed, future and completed auctions reject bids; accepted bids are
