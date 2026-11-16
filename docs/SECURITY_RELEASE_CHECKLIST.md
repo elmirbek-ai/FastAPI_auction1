@@ -12,6 +12,8 @@ Review and merge **PR #4** rather than merging #2 and #3 separately.
 - Two immediate logins without a duplicate refresh-token database error
 - PostgreSQL 16, Redis 7, rate limiter, and Alembic upgrade/check
 - FastAPI app startup and SQLAdmin login/logout
+- SQLAdmin resources are read-only, preventing privileged UI edits/deletes from
+  bypassing auction/bid business invariants
 - Auction bid creation: open auction window, strict increase over highest bid,
   seller self-bidding prohibition, transactional PostgreSQL auction-row lock
 - Immutable accepted bids; protect auction and car deletion after bidding
