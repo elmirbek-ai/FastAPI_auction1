@@ -19,7 +19,7 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str = Field(min_length=1)
 
 
-oauth2_schema = OAuth2PasswordBearer(tokenUrl='/auth/login/')
+oauth2_schema = OAuth2PasswordBearer(tokenUrl='/auth/login')
 password_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
 
