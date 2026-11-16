@@ -6,6 +6,7 @@ existing user/production database. No external APIs or production secrets.
 import os
 import unittest
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 
 import redis
 import redis.asyncio as async_redis
@@ -21,8 +22,9 @@ if "auction_ci" not in db_url or "localhost" not in db_url:
     raise RuntimeError("Refusing integration tests outside isolated local auction_ci database")
 
 from auction_app.api.endpoints.auth import auth_router  # noqa: E402
-from auction_app.db.database import Base, engine  # noqa: E402
+from auction_app.db.database import Base, engine, SessionLocal  # noqa: E402
 from auction_app.db import models  # noqa: F401,E402
+from auction_app.api.endpoints.auth import create_access_token  # noqa: E402
 
 
 @asynccontextmanager
@@ -152,6 +154,75 @@ class PostgreSQLRedisAuthenticationTests(unittest.TestCase):
             },
         )
         self.assertEqual(same_email.status_code, 409, same_email.text)
+
+    def test_postgres_bid_rules_and_immutable_auction_history(self):
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with SessionLocal() as db:
+            seller = models.UserProfile(
+                username="pg_bid_seller",
+                email="pg-bid-seller@example.com",
+                hashed_password="not-a-real-password",
+                role=models.RoleChoices.seller,
+            )
+            buyer = models.UserProfile(
+                username="pg_bid_buyer",
+                email="pg-bid-buyer@example.com",
+                hashed_password="not-a-real-password",
+                role=models.RoleChoices.buyer,
+            )
+            db.add_all([seller, buyer])
+            db.flush()
+            car = models.Car(
+                brand="Test", model="Postgres", year=now,
+                fuel_type=models.FuelType.petrol,
+                transmission=models.Transmission.auto,
+                mileage=5, price=100,
+                description="Integration vehicle", image="test.jpg",
+                seller_id=seller.id,
+            )
+            db.add(car)
+            db.flush()
+            auction = models.Auction(
+                car_id=car.id,
+                start_price=100,
+                start_time=now - timedelta(hours=1),
+                end_time=now + timedelta(hours=1),
+                status=models.StatusCar.active,
+            )
+            db.add(auction)
+            db.commit()
+            auction_id, car_id = auction.id, car.id
+
+        buyer_token = create_access_token({"sub": "pg_bid_buyer"})
+        seller_token = create_access_token({"sub": "pg_bid_seller"})
+        bidder_headers = {"Authorization": f"Bearer {buyer_token}"}
+        owner_headers = {"Authorization": f"Bearer {seller_token}"}
+
+        first = self.client.post(
+            "/bid/", headers=bidder_headers,
+            json={"auction_id": auction_id, "amount": 125},
+        )
+        self.assertEqual(first.status_code, 200, first.text)
+        insufficient = self.client.post(
+            "/bid/", headers=bidder_headers,
+            json={"auction_id": auction_id, "amount": 120},
+        )
+        self.assertEqual(insufficient.status_code, 409, insufficient.text)
+        self_bid = self.client.post(
+            "/bid/", headers=owner_headers,
+            json={"auction_id": auction_id, "amount": 150},
+        )
+        self.assertEqual(self_bid.status_code, 403, self_bid.text)
+        self.assertEqual(
+            self.client.delete(
+                f"/auction/{auction_id}", headers=owner_headers,
+            ).status_code, 409,
+        )
+        self.assertEqual(
+            self.client.delete(
+                f"/car/{car_id}", headers=owner_headers,
+            ).status_code, 409,
+        )
 
     def test_registration_rate_limit_enforced(self):
         statuses = []
