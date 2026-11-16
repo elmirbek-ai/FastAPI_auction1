@@ -12,6 +12,11 @@ Review and merge **PR #4** rather than merging #2 and #3 separately.
 - Two immediate logins without a duplicate refresh-token database error
 - PostgreSQL 16, Redis 7, rate limiter, and Alembic upgrade/check
 - FastAPI app startup and SQLAdmin login/logout
+- Auction bid creation: open auction window, strict increase over highest bid,
+  seller self-bidding prohibition, transactional PostgreSQL auction-row lock
+- Immutable accepted bids; protect auction and car deletion after bidding
+- Reject forged bid owner ID, record ID and bid timestamps in request bodies
+
 
 ## Required before production
 
@@ -32,6 +37,16 @@ Review and merge **PR #4** rather than merging #2 and #3 separately.
 - [ ] Review RBAC and object ownership end-to-end. Car/auction/bid/feedback
       writes now require JWT authentication and owner checks, but workflows,
       bid rules, role transitions and business validation need full testing.
+- [ ] Update bid clients: POST /bid/ now accepts only `auction_id` and
+      `amount` (positive integer); bidder and bid timestamp are server-owned.
+      Closed, future and completed auctions reject bids; accepted bids are
+      immutable and cannot be deleted through the API.
+- [ ] Confirm business policy for auction start-price strictness, bid increments,
+      seller/buyer roles, cancellation, ties, clock behavior, completed auctions,
+      payouts, disputes and audit retention before production.
+- [ ] Concurrency-test bids with multiple independent PostgreSQL connections.
+      The implementation locks the parent auction row, but CI does not stress
+      simultaneous bidder races at production load.
 - [ ] Verify frontend/API consumers send access Bearer tokens for write routes;
       unauthenticated writes now return HTTP 401.
 - [ ] Test the intended production dependency versions and startup/deployment
