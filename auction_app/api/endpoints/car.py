@@ -71,6 +71,15 @@ async def car_update(car_id: int, car: CarSchema, db: Session = Depends(get_db),
     if car_db.seller_id != user.id:
         raise HTTPException(status_code=403, detail='Not the owner of this car')
 
+    # Prevent retroactive changes to advertised details after bids are accepted.
+    auction_id = db.query(Auction.id).filter(Auction.car_id == car_db.id).scalar()
+    if auction_id is not None and db.query(Bid.id).filter(
+        Bid.auction_id == auction_id
+    ).first():
+        raise HTTPException(
+            status_code=409, detail='Cannot modify a car after bids are placed'
+        )
+
     car_db.brand = car.brand
     car_db.model = car.model
     car_db.year = car.year
