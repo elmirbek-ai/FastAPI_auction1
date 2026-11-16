@@ -5,7 +5,7 @@ from auction_app.db.models import UserProfile
 from sqlalchemy.orm import Session
 from auction_app.db.database import SessionLocal
 from auction_app.db.models import Auction, Car, Bid
-from auction_app.db.schema import AuctionSchema
+from auction_app.db.schema import AuctionSchema, AuctionWriteSchema
 
 auction_router = APIRouter(prefix='/auction', tags=['Auction'])
 
@@ -19,7 +19,7 @@ async def get_db():
 
 # Create a new auction
 @auction_router.post('/', response_model=AuctionSchema, summary='Создать аукцион')
-async def create_auction(auction: AuctionSchema, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
+async def create_auction(auction: AuctionWriteSchema, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
     car = db.query(Car).filter(Car.id == auction.car_id).first()
     if car is None:
         raise HTTPException(status_code=404, detail='Car not found')
@@ -58,7 +58,7 @@ async def auction_detail(auction_id: int, db: Session = Depends(get_db)):
 
 # Update an auction
 @auction_router.put('/{auction_id}', response_model=AuctionSchema, summary='Обновить аукцион')
-async def auction_update(auction_id: int, auction: AuctionSchema, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
+async def auction_update(auction_id: int, auction: AuctionWriteSchema, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
     auction_db = db.query(Auction).filter(Auction.id == auction_id).first()
 
     if auction_db is None:
