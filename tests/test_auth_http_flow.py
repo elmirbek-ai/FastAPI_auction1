@@ -245,7 +245,6 @@ class AuthenticationFlowTests(unittest.TestCase):
             f"/auction/{auction_id}",
             headers={"Authorization": f"Bearer {seller_access}"},
             json={
-                "id": auction_id,
                 "car_id": car_id,
                 "start_price": 900,
                 "min_price": None,
@@ -259,7 +258,6 @@ class AuthenticationFlowTests(unittest.TestCase):
             f"/car/{car_id}",
             headers={"Authorization": f"Bearer {seller_access}"},
             json={
-                "id": car_id,
                 "brand": "Altered",
                 "model": "Vehicle",
                 "year": "2024-01-01",
@@ -269,7 +267,6 @@ class AuthenticationFlowTests(unittest.TestCase):
                 "price": 1000,
                 "description": "Modified car",
                 "image": "test.jpg",
-                "seller_id": seller_id,
             },
         )
         self.assertEqual(update_car.status_code, 409, update_car.text)
@@ -286,6 +283,36 @@ class AuthenticationFlowTests(unittest.TestCase):
             json={"auction_id": auction_id, "amount": 2000},
         )
         self.assertEqual(expired.status_code, 409, expired.text)
+
+    def test_resource_write_inputs_reject_impersonation_fields(self):
+        from auction_app.db.schema import (
+            CarWriteSchema, AuctionWriteSchema, FeedbackWriteSchema,
+        )
+        from pydantic import ValidationError
+        car_data = {
+            "brand": "Test", "model": "Example", "year": "2024-01-01",
+            "fuel_type": "Бензин", "transmission": "автомат",
+            "mileage": 0, "price": 1500,
+            "description": "Example", "image": "test.jpg",
+        }
+        with self.assertRaises(ValidationError):
+            CarWriteSchema.model_validate({**car_data, "seller_id": 42})
+        auction_data = {
+            "car_id": 1, "start_price": 500,
+            "start_time": "2026-11-16T08:00:00",
+            "end_time": "2026-11-17T08:00:00",
+        }
+        with self.assertRaises(ValidationError):
+            AuctionWriteSchema.model_validate({**auction_data, "id": 42})
+        with self.assertRaises(ValidationError):
+            FeedbackWriteSchema.model_validate({
+                "seller_feedback_id": 1, "rating": 5,
+                "text": "good", "bayer_id": 42,
+            })
+        with self.assertRaises(ValidationError):
+            FeedbackWriteSchema.model_validate({
+                "seller_feedback_id": 1, "rating": 8, "text": "invalid",
+            })
 
     def test_register_login_refresh_logout(self):
         register = self.register()
