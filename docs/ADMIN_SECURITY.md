@@ -35,9 +35,10 @@ secrets may need to be rotated if previously exposed.
 - The user-account listing is read-only, excludes password hashes from its
   listed and detailed fields, and disables user record export and import.
 - By default SQLAdmin routes are absent entirely.
-- The remaining administration views have broad authority **after login**;
-  use a dedicated administrator and restrict access by VPN/IP or an
-  authenticated reverse proxy when appropriate.
+- All administration views are read-only to prevent bypassing API authorization,
+  auction lifecycle and immutable-bid rules. Administrative mutations require
+  separately designed audited workflows. Restrict SQLAdmin access by VPN/IP
+  or an authenticated reverse proxy.
 
 ## Validation scope
 
