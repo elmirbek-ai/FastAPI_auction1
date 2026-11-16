@@ -1,11 +1,13 @@
 from typing import List
 
 from fastapi import Depends, HTTPException, APIRouter
+from auction_app.authentication import get_current_user
+from auction_app.db.models import UserProfile
 from sqlalchemy.orm import Session
 
 from auction_app.db.database import SessionLocal
-from auction_app.db.models import Car
-from auction_app.db.schema import CarSchema
+from auction_app.db.models import Car, Auction, Bid
+from auction_app.db.schema import CarSchema, CarWriteSchema
 
 car_router = APIRouter(prefix='/car', tags=['Car'])
 
@@ -21,7 +23,9 @@ async def get_db():
 
 # Create a new car
 @car_router.post('/', response_model=CarSchema, summary='Создать машину')
-async def create_car(car: CarSchema, db: Session = Depends(get_db)):
+async def create_car(car: CarWriteSchema, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
+    if user.role.value != 'seller':
+        raise HTTPException(status_code=403, detail='Seller role required')
     car_db = Car(
         brand=car.brand,
         model=car.model,
@@ -32,7 +36,7 @@ async def create_car(car: CarSchema, db: Session = Depends(get_db)):
         price=car.price,
         description=car.description,
         image=car.image,
-        seller_id=car.seller_id
+        seller_id=user.id
     )
     db.add(car_db)
     db.commit()
@@ -58,11 +62,28 @@ async def car_detail(car_id: int, db: Session = Depends(get_db)):
 
 # Update a car
 @car_router.put('/{car_id}', response_model=CarSchema, summary='Обновить машину')
-async def car_update(car_id: int, car: CarSchema, db: Session = Depends(get_db)):
-    car_db = db.query(Car).filter(Car.id == car_id).first()
+async def car_update(car_id: int, car: CarWriteSchema, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
+    car_db = db.query(Car).filter(Car.id == car_id).with_for_update().first()
 
     if car_db is None:
         raise HTTPException(status_code=404, detail='Машина не найдена')
+
+    if car_db.seller_id != user.id:
+        raise HTTPException(status_code=403, detail='Not the owner of this car')
+
+    # Prevent retroactive changes to advertised details after bids are accepted.
+    auction_id = (
+        db.query(Auction.id)
+        .filter(Auction.car_id == car_db.id)
+        .with_for_update()
+        .scalar()
+    )
+    if auction_id is not None and db.query(Bid.id).filter(
+        Bid.auction_id == auction_id
+    ).first():
+        raise HTTPException(
+            status_code=409, detail='Cannot modify a car after bids are placed'
+        )
 
     car_db.brand = car.brand
     car_db.model = car.model
@@ -73,7 +94,7 @@ async def car_update(car_id: int, car: CarSchema, db: Session = Depends(get_db))
     car_db.price = car.price
     car_db.description = car.description
     car_db.image = car.image
-    car_db.seller_id = car.seller_id
+    car_db.seller_id = user.id
 
     db.add(car_db)
     db.commit()
@@ -83,12 +104,28 @@ async def car_update(car_id: int, car: CarSchema, db: Session = Depends(get_db))
 
 # Delete a car
 @car_router.delete('/{car_id}', summary='Удалить машину')
-async def car_delete(car_id: int, db: Session = Depends(get_db)):
-    car_db = db.query(Car).filter(Car.id == car_id).first()
+async def car_delete(car_id: int, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
+    car_db = db.query(Car).filter(Car.id == car_id).with_for_update().first()
 
     if car_db is None:
         raise HTTPException(status_code=404, detail='Машина не найдена')
 
+    if car_db.seller_id != user.id:
+        raise HTTPException(status_code=403, detail='Not the owner of this car')
+    # Deleting a car would cascade into its auction and placed bids.
+    # Protect the auction record once bidding has started.
+    auction_id = (
+        db.query(Auction.id)
+        .filter(Auction.car_id == car_db.id)
+        .with_for_update()
+        .scalar()
+    )
+    if auction_id is not None and db.query(Bid.id).filter(
+        Bid.auction_id == auction_id
+    ).first():
+        raise HTTPException(
+            status_code=409, detail='Cannot delete a car with accepted bids'
+        )
     db.delete(car_db)
     db.commit()
     return {'message': 'Машина удалена'}

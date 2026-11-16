@@ -1,2 +1,9 @@
+.env
+.env.*
+!.env.example
 *.env
 *.config.py
+__pycache__/
+*.py[cod]
+.venv/
+venv/
