@@ -217,7 +217,18 @@ class AuthenticationFlowTests(unittest.TestCase):
             f"/bid/{bid_id}",
             headers={"Authorization": f"Bearer {buyer_access}"},
         )
-        self.assertEqual(deleted.status_code, 200, deleted.text)
+        self.assertEqual(deleted.status_code, 409, deleted.text)
+        # Neither the seller nor the buyer can erase accepted-bid history.
+        delete_auction = self.client.delete(
+            f"/auction/{auction_id}",
+            headers={"Authorization": f"Bearer {seller_access}"},
+        )
+        self.assertEqual(delete_auction.status_code, 409, delete_auction.text)
+        delete_car = self.client.delete(
+            f"/car/{car.id}",
+            headers={"Authorization": f"Bearer {seller_access}"},
+        )
+        self.assertEqual(delete_car.status_code, 409, delete_car.text)
         with self.Session() as db:
             sale = db.query(models.Auction).filter(
                 models.Auction.id == auction_id
