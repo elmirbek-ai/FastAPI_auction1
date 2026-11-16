@@ -284,6 +284,69 @@ class AuthenticationFlowTests(unittest.TestCase):
         )
         self.assertEqual(expired.status_code, 409, expired.text)
 
+    def test_auction_timezone_offsets_are_normalized_to_utc(self):
+        from auction_app.db.schema import AuctionWriteSchema
+        from pydantic import ValidationError
+
+        parsed = AuctionWriteSchema.model_validate({
+            "car_id": 1,
+            "start_price": 500,
+            "start_time": "2026-11-20T15:00:00+06:00",
+            "end_time": "2026-11-20T10:30:00Z",
+        })
+        self.assertEqual(parsed.start_time, datetime(2026, 11, 20, 9))
+        self.assertEqual(parsed.end_time, datetime(2026, 11, 20, 10, 30))
+        self.assertIsNone(parsed.start_time.tzinfo)
+        self.assertIsNone(parsed.end_time.tzinfo)
+
+        # UTC normalization happens before comparing auction windows.
+        with self.assertRaises(ValidationError):
+            AuctionWriteSchema.model_validate({
+                "car_id": 1,
+                "start_price": 500,
+                "start_time": "2026-11-20T15:00:00+06:00",
+                "end_time": "2026-11-20T08:30:00Z",
+            })
+
+    def test_auction_write_endpoint_persists_utc_normalized_times(self):
+        with self.Session() as db:
+            seller = models.UserProfile(
+                username="offset_seller", email="offset-seller@example.com",
+                hashed_password="not-used", role=models.RoleChoices.seller,
+            )
+            db.add(seller)
+            db.flush()
+            car_obj = models.Car(
+                brand="Clock", model="Offset", year=datetime(2024, 1, 1),
+                fuel_type=models.FuelType.petrol,
+                transmission=models.Transmission.auto,
+                mileage=1, price=1000, description="Time-zone test",
+                image="test.jpg", seller_id=seller.id,
+            )
+            db.add(car_obj)
+            db.commit()
+            car_id = car_obj.id
+
+        result = self.client.post(
+            "/auction/",
+            headers={"Authorization": "Bearer " + auth.create_access_token({
+                "sub": "offset_seller"
+            })},
+            json={
+                "car_id": car_id, "start_price": 100,
+                "start_time": "2026-11-20T15:00:00+06:00",
+                "end_time": "2026-11-20T16:00:00+06:00",
+                "status": "active",
+            },
+        )
+        self.assertEqual(result.status_code, 200, result.text)
+        with self.Session() as db:
+            saved = db.query(models.Auction).filter(
+                models.Auction.car_id == car_id
+            ).one()
+            self.assertEqual(saved.start_time, datetime(2026, 11, 20, 9))
+            self.assertEqual(saved.end_time, datetime(2026, 11, 20, 10))
+
     def test_resource_write_inputs_reject_impersonation_fields(self):
         from auction_app.db.schema import (
             CarWriteSchema, AuctionWriteSchema, FeedbackWriteSchema,
