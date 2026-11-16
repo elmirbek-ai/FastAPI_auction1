@@ -294,6 +294,85 @@ class PostgreSQLRedisAuthenticationTests(unittest.TestCase):
             ).all()
             self.assertEqual(len(accepted), 1)
 
+    def test_bid_and_auction_delete_race_preserves_accepted_bid(self):
+        """Bid versus deletion: either delete first or preserve the winning bid."""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with SessionLocal() as db:
+            seller = models.UserProfile(
+                username="delete_race_seller",
+                email="delete-race-seller@example.com",
+                hashed_password="test-hash",
+                role=models.RoleChoices.seller,
+            )
+            buyer = models.UserProfile(
+                username="delete_race_buyer",
+                email="delete-race-buyer@example.com",
+                hashed_password="test-hash",
+                role=models.RoleChoices.buyer,
+            )
+            db.add_all([seller, buyer])
+            db.flush()
+            vehicle = models.Car(
+                brand="Race", model="Deletion", year=now,
+                fuel_type=models.FuelType.petrol,
+                transmission=models.Transmission.auto,
+                mileage=1, price=100,
+                description="Bid-deletion race test", image="test.jpg",
+                seller_id=seller.id,
+            )
+            db.add(vehicle)
+            db.flush()
+            auction = models.Auction(
+                car_id=vehicle.id,
+                start_price=100,
+                start_time=now - timedelta(minutes=5),
+                end_time=now + timedelta(minutes=5),
+                status=models.StatusCar.active,
+            )
+            db.add(auction)
+            db.commit()
+            auction_id = auction.id
+
+        seller_token = create_access_token({"sub": "delete_race_seller"})
+        buyer_token = create_access_token({"sub": "delete_race_buyer"})
+
+        def bid_request():
+            return self.client.post(
+                "/bid/",
+                headers={"Authorization": f"Bearer {buyer_token}"},
+                json={"auction_id": auction_id, "amount": 150},
+            ).status_code
+
+        def delete_request():
+            return self.client.delete(
+                f"/auction/{auction_id}",
+                headers={"Authorization": f"Bearer {seller_token}"},
+            ).status_code
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            bid_future = pool.submit(bid_request)
+            delete_future = pool.submit(delete_request)
+            bid_status = bid_future.result()
+            delete_status = delete_future.result()
+
+        # If a bid was accepted, its auction and bid row must still exist.
+        with SessionLocal() as db:
+            auction_stored = db.query(models.Auction).filter(
+                models.Auction.id == auction_id
+            ).first()
+            bid_count = db.query(models.Bid).filter(
+                models.Bid.auction_id == auction_id
+            ).count()
+            if bid_status == 200:
+                self.assertEqual(delete_status, 409)
+                self.assertIsNotNone(auction_stored)
+                self.assertEqual(bid_count, 1)
+            else:
+                self.assertEqual(bid_status, 404)
+                self.assertEqual(delete_status, 200)
+                self.assertIsNone(auction_stored)
+                self.assertEqual(bid_count, 0)
+
     def test_registration_rate_limit_enforced(self):
         statuses = []
         for _ in range(7):
