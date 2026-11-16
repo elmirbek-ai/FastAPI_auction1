@@ -16,6 +16,8 @@ Review and merge **PR #4** rather than merging #2 and #3 separately.
 - FastAPI app startup and SQLAdmin login/logout
 - SQLAdmin resources are read-only, preventing privileged UI edits/deletes from
   bypassing auction/bid business invariants
+- Auction input timestamps normalized from explicit offsets to UTC-naive
+  storage, matching server UTC bid-window comparisons
 - Auction bid creation: open auction window, strict increase over highest bid,
   seller self-bidding prohibition, transactional PostgreSQL auction-row lock
 - Immutable accepted bids; protect auction and car deletion after bidding
