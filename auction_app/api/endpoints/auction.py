@@ -99,7 +99,7 @@ async def auction_update(auction_id: int, auction: AuctionWriteSchema, db: Sessi
 # Delete an auction
 @auction_router.delete('/{auction_id}', summary='Удалить аукцион')
 async def auction_delete(auction_id: int, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
-    auction_db = db.query(Auction).filter(Auction.id == auction_id).first()
+    auction_db = db.query(Auction).filter(Auction.id == auction_id).with_for_update().first()
 
     if auction_db is None:
         raise HTTPException(status_code=404, detail='Аукцион не найден')
