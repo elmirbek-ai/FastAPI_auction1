@@ -240,6 +240,40 @@ class AuthenticationFlowTests(unittest.TestCase):
             headers={"Authorization": f"Bearer {seller_access}"},
         )
         self.assertEqual(delete_car.status_code, 409, delete_car.text)
+
+        update_auction = self.client.put(
+            f"/auction/{auction_id}",
+            headers={"Authorization": f"Bearer {seller_access}"},
+            json={
+                "id": auction_id,
+                "car_id": car_id,
+                "start_price": 900,
+                "min_price": None,
+                "start_time": "2024-01-01T00:00:00",
+                "end_time": "2030-01-01T00:00:00",
+                "status": "active",
+            },
+        )
+        self.assertEqual(update_auction.status_code, 409, update_auction.text)
+        update_car = self.client.put(
+            f"/car/{car_id}",
+            headers={"Authorization": f"Bearer {seller_access}"},
+            json={
+                "id": car_id,
+                "brand": "Altered",
+                "model": "Vehicle",
+                "year": "2024-01-01",
+                "fuel_type": "Бензин",
+                "transmission": "автомат",
+                "mileage": 123,
+                "price": 1000,
+                "description": "Modified car",
+                "image": "test.jpg",
+                "seller_id": seller_id,
+            },
+        )
+        self.assertEqual(update_car.status_code, 409, update_car.text)
+
         with self.Session() as db:
             sale = db.query(models.Auction).filter(
                 models.Auction.id == auction_id
