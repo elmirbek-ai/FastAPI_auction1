@@ -84,6 +84,10 @@ async def auction_update(auction_id: int, auction: AuctionWriteSchema, db: Sessi
         )
     if auction.start_price <= 0 or auction.end_time <= auction.start_time:
         raise HTTPException(status_code=422, detail='Invalid auction price or time range')
+    if auction.car_id != auction_db.car_id and db.query(Auction.id).filter(
+        Auction.car_id == auction.car_id
+    ).first():
+        raise HTTPException(status_code=409, detail='Car already has an auction')
     auction_db.car_id = auction.car_id
     auction_db.start_price = auction.start_price
     auction_db.min_price = auction.min_price
@@ -91,8 +95,14 @@ async def auction_update(auction_id: int, auction: AuctionWriteSchema, db: Sessi
     auction_db.end_time = auction.end_time
     auction_db.status = auction.status
 
-    db.add(auction_db)
-    db.commit()
+    try:
+        db.add(auction_db)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail='Car already has an auction'
+        ) from exc
     db.refresh(auction_db)
     return auction_db
 
