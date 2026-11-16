@@ -4,7 +4,7 @@ from auction_app.authentication import get_current_user
 from auction_app.db.models import UserProfile
 from sqlalchemy.orm import Session
 from auction_app.db.database import SessionLocal
-from auction_app.db.models import Auction, Car
+from auction_app.db.models import Auction, Car, Bid
 from auction_app.db.schema import AuctionSchema
 
 auction_router = APIRouter(prefix='/auction', tags=['Auction'])
@@ -25,6 +25,10 @@ async def create_auction(auction: AuctionSchema, db: Session = Depends(get_db), 
         raise HTTPException(status_code=404, detail='Car not found')
     if car.seller_id != user.id:
         raise HTTPException(status_code=403, detail='Not the owner of this car')
+    if auction.start_price <= 0 or auction.end_time <= auction.start_time:
+        raise HTTPException(status_code=422, detail='Invalid auction price or time range')
+    if db.query(Auction.id).filter(Auction.car_id == auction.car_id).first():
+        raise HTTPException(status_code=409, detail='Car already has an auction')
     auction_db = Auction(
         car_id=auction.car_id,
         start_price=auction.start_price,
@@ -67,6 +71,12 @@ async def auction_update(auction_id: int, auction: AuctionSchema, db: Session = 
         raise HTTPException(status_code=404, detail='Car not found')
     if new_car.seller_id != user.id:
         raise HTTPException(status_code=403, detail='Not the owner of the new car')
+    if db.query(Bid.id).filter(Bid.auction_id == auction_db.id).first():
+        raise HTTPException(
+            status_code=409, detail='Cannot alter an auction after bids are placed'
+        )
+    if auction.start_price <= 0 or auction.end_time <= auction.start_time:
+        raise HTTPException(status_code=422, detail='Invalid auction price or time range')
     auction_db.car_id = auction.car_id
     auction_db.start_price = auction.start_price
     auction_db.min_price = auction.min_price
@@ -89,6 +99,10 @@ async def auction_delete(auction_id: int, db: Session = Depends(get_db), user: U
 
     if auction_db.car.seller_id != user.id:
         raise HTTPException(status_code=403, detail='Not the owner of this auction')
+    if db.query(Bid.id).filter(Bid.auction_id == auction_db.id).first():
+        raise HTTPException(
+            status_code=409, detail='Auction with accepted bids cannot be deleted'
+        )
     db.delete(auction_db)
     db.commit()
     return {'message': 'Аукцион удален'}
