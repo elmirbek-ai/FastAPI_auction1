@@ -45,6 +45,10 @@ class AuctionSchema(BaseModel):
     status: StatusCar
 
 
+class BidCreateSchema(BaseModel):
+    auction_id: int = Field(gt=0)
+    amount: int = Field(gt=0)
+
 class BidSchema(BaseModel):
     id: int
     auction_id: int
