@@ -3,6 +3,7 @@ from fastapi import Depends, HTTPException, APIRouter
 from auction_app.authentication import get_current_user
 from auction_app.db.models import UserProfile
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from auction_app.db.database import SessionLocal
 from auction_app.db.models import Auction, Car, Bid
 from auction_app.db.schema import AuctionSchema, AuctionWriteSchema
@@ -20,7 +21,7 @@ async def get_db():
 # Create a new auction
 @auction_router.post('/', response_model=AuctionSchema, summary='Создать аукцион')
 async def create_auction(auction: AuctionWriteSchema, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
-    car = db.query(Car).filter(Car.id == auction.car_id).first()
+    car = db.query(Car).filter(Car.id == auction.car_id).with_for_update().first()
     if car is None:
         raise HTTPException(status_code=404, detail='Car not found')
     if car.seller_id != user.id:
@@ -37,8 +38,14 @@ async def create_auction(auction: AuctionWriteSchema, db: Session = Depends(get_
         end_time=auction.end_time,
         status=auction.status
     )
-    db.add(auction_db)
-    db.commit()
+    try:
+        db.add(auction_db)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail='Car already has an auction'
+        ) from exc
     db.refresh(auction_db)
     return auction_db
 
@@ -59,7 +66,7 @@ async def auction_detail(auction_id: int, db: Session = Depends(get_db)):
 # Update an auction
 @auction_router.put('/{auction_id}', response_model=AuctionSchema, summary='Обновить аукцион')
 async def auction_update(auction_id: int, auction: AuctionWriteSchema, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
-    auction_db = db.query(Auction).filter(Auction.id == auction_id).first()
+    auction_db = db.query(Auction).filter(Auction.id == auction_id).with_for_update().first()
 
     if auction_db is None:
         raise HTTPException(status_code=404, detail='Аукцион не найден')
