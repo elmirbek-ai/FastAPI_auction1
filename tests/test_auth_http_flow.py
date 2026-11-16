@@ -207,6 +207,17 @@ class AuthenticationFlowTests(unittest.TestCase):
             json={"auction_id": auction_id, "amount": -1},
         )
         self.assertEqual(invalid.status_code, 422, invalid.text)
+        forged = self.client.post(
+            "/bid/",
+            headers={"Authorization": f"Bearer {buyer_access}"},
+            json={
+                "auction_id": auction_id,
+                "amount": 1900,
+                "user_id": seller_id,
+                "date_registered": "2026-01-01T01:00:00",
+            },
+        )
+        self.assertEqual(forged.status_code, 422, forged.text)
 
         denied = self.client.delete(
             f"/bid/{bid_id}",
