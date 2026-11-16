@@ -21,6 +21,20 @@ class UserProfileSchema(BaseModel):
     date_registered: datetime
 
 
+class CarWriteSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    brand: str = Field(min_length=1, max_length=40)
+    model: str = Field(min_length=1, max_length=40)
+    year: date
+    fuel_type: FuelType
+    transmission: Transmission
+    mileage: int = Field(ge=0)
+    price: float = Field(gt=0)
+    description: str = Field(min_length=1)
+    image: str = Field(min_length=1)
+
+
 class CarSchema(BaseModel):
     id: int
     brand: str
@@ -33,6 +47,17 @@ class CarSchema(BaseModel):
     description: str
     image: str
     seller_id: int
+
+
+class AuctionWriteSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    car_id: int = Field(gt=0)
+    start_price: int = Field(gt=0)
+    min_price: Optional[int] = Field(default=None, ge=0)
+    start_time: datetime
+    end_time: datetime
+    status: StatusCar = StatusCar.active
 
 
 class AuctionSchema(BaseModel):
@@ -57,6 +82,14 @@ class BidSchema(BaseModel):
     user_id: int
     amount: int
     date_registered: datetime
+
+
+class FeedbackWriteSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    seller_feedback_id: int = Field(gt=0)
+    rating: int = Field(ge=1, le=5)
+    text: str = Field(min_length=1, max_length=2000)
 
 
 class FeedbackSchema(BaseModel):
