@@ -1,6 +1,6 @@
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Optional
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator, model_validator
 from auction_app.db.models import RoleChoices, FuelType, Transmission, StatusCar
 
 
@@ -58,6 +58,22 @@ class AuctionWriteSchema(BaseModel):
     start_time: datetime
     end_time: datetime
     status: StatusCar = StatusCar.active
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def normalize_to_utc_naive(cls, value: datetime) -> datetime:
+        # Database columns are timezone-naive and bidding compares UTC-naive
+        # timestamps. Convert offset-aware values to UTC before persisting.
+        # Existing timezone-naive clients are interpreted as UTC.
+        if value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
+    @model_validator(mode="after")
+    def validate_time_window(self):
+        if self.end_time <= self.start_time:
+            raise ValueError("Auction end_time must be after start_time")
+        return self
 
 
 class AuctionSchema(BaseModel):
