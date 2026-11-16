@@ -373,6 +373,68 @@ class PostgreSQLRedisAuthenticationTests(unittest.TestCase):
                 self.assertIsNone(auction_stored)
                 self.assertEqual(bid_count, 0)
 
+    def test_vehicle_update_blocks_while_auction_is_locked(self):
+        """Vehicle mutation locks the parent car row before auction checks."""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with SessionLocal() as db:
+            seller = models.UserProfile(
+                username="locked_vehicle_seller",
+                email="locked-vehicle@example.com",
+                hashed_password="test-hash",
+                role=models.RoleChoices.seller,
+            )
+            db.add(seller)
+            db.flush()
+            vehicle = models.Car(
+                brand="Locked", model="Vehicle", year=now,
+                fuel_type=models.FuelType.petrol,
+                transmission=models.Transmission.auto,
+                mileage=1, price=100,
+                description="Lock ordering integration", image="test.jpg",
+                seller_id=seller.id,
+            )
+            db.add(vehicle)
+            db.commit()
+            car_id = vehicle.id
+
+        seller_token = create_access_token({"sub": "locked_vehicle_seller"})
+        update_data = {
+            "brand": "Updated", "model": "Vehicle", "year": "2024-01-01",
+            "fuel_type": "Бензин", "transmission": "автомат",
+            "mileage": 10, "price": 150,
+            "description": "Updated while locked", "image": "test.jpg",
+        }
+        with SessionLocal() as blocking:
+            vehicle = blocking.query(models.Car).filter(
+                models.Car.id == car_id
+            ).with_for_update().one()
+
+            def update():
+                # PostgreSQL SET LOCAL lock_timeout forces an error if the
+                # request does not release its lock correctly; here we test
+                # that the request waits rather than bypassing this lock.
+                return self.client.put(
+                    f"/car/{car_id}",
+                    headers={"Authorization": f"Bearer {seller_token}"},
+                    json=update_data,
+                )
+
+            from threading import Event
+            started = Event()
+
+            def run_update():
+                started.set()
+                return update()
+
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(run_update)
+                self.assertTrue(started.wait(timeout=5))
+                # Finish the blocker transaction; the API must then proceed.
+                blocking.rollback()
+                response = future.result(timeout=15)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["brand"], "Updated")
+
     def test_registration_rate_limit_enforced(self):
         statuses = []
         for _ in range(7):
