@@ -63,7 +63,7 @@ async def car_detail(car_id: int, db: Session = Depends(get_db)):
 # Update a car
 @car_router.put('/{car_id}', response_model=CarSchema, summary='Обновить машину')
 async def car_update(car_id: int, car: CarWriteSchema, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
-    car_db = db.query(Car).filter(Car.id == car_id).first()
+    car_db = db.query(Car).filter(Car.id == car_id).with_for_update().first()
 
     if car_db is None:
         raise HTTPException(status_code=404, detail='Машина не найдена')
@@ -105,7 +105,7 @@ async def car_update(car_id: int, car: CarWriteSchema, db: Session = Depends(get
 # Delete a car
 @car_router.delete('/{car_id}', summary='Удалить машину')
 async def car_delete(car_id: int, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
-    car_db = db.query(Car).filter(Car.id == car_id).first()
+    car_db = db.query(Car).filter(Car.id == car_id).with_for_update().first()
 
     if car_db is None:
         raise HTTPException(status_code=404, detail='Машина не найдена')
