@@ -112,7 +112,31 @@ async def logout(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
     stored_token = db.query(RefreshToken).filter(RefreshToken.token == refresh_token).first()
     if not stored_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Маалымат туура эмес')
-    db.delete(stored_token)
+    try:
+        username = validate_refresh_token(
+            refresh_token, secret_key=SECRET_KEY, algorithm=ALGORITHM
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Refresh token жараксыз же мөөнөтү бүткөн',
+        ) from exc
+    if stored_token.user is None or stored_token.user.username != username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Refresh token колдонуучуга туура келбейт',
+        )
+    # The conditional delete remains safe when logout races token rotation.
+    deleted = db.query(RefreshToken).filter(
+        RefreshToken.id == stored_token.id,
+        RefreshToken.token == refresh_token,
+    ).delete(synchronize_session=False)
+    if deleted != 1:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Refresh token already revoked or rotated',
+        )
     db.commit()
     return {'message': 'Вышли'}
 
