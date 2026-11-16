@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from auction_app.db.database import SessionLocal
 from auction_app.db.models import Car, Auction, Bid
-from auction_app.db.schema import CarSchema
+from auction_app.db.schema import CarSchema, CarWriteSchema
 
 car_router = APIRouter(prefix='/car', tags=['Car'])
 
@@ -23,7 +23,7 @@ async def get_db():
 
 # Create a new car
 @car_router.post('/', response_model=CarSchema, summary='Создать машину')
-async def create_car(car: CarSchema, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
+async def create_car(car: CarWriteSchema, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
     if user.role.value != 'seller':
         raise HTTPException(status_code=403, detail='Seller role required')
     car_db = Car(
@@ -62,7 +62,7 @@ async def car_detail(car_id: int, db: Session = Depends(get_db)):
 
 # Update a car
 @car_router.put('/{car_id}', response_model=CarSchema, summary='Обновить машину')
-async def car_update(car_id: int, car: CarSchema, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
+async def car_update(car_id: int, car: CarWriteSchema, db: Session = Depends(get_db), user: UserProfile = Depends(get_current_user)):
     car_db = db.query(Car).filter(Car.id == car_id).first()
 
     if car_db is None:
