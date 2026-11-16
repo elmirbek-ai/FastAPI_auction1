@@ -314,6 +314,46 @@ class AuthenticationFlowTests(unittest.TestCase):
                 "seller_feedback_id": 1, "rating": 8, "text": "invalid",
             })
 
+    def test_feedback_owner_and_target_validation(self):
+        with self.Session() as db:
+            reviewer = models.UserProfile(
+                username="feedback_buyer", email="fb-buyer@example.com",
+                hashed_password="unused", role=models.RoleChoices.buyer,
+            )
+            seller = models.UserProfile(
+                username="feedback_seller", email="fb-seller@example.com",
+                hashed_password="unused", role=models.RoleChoices.seller,
+            )
+            db.add_all([reviewer, seller])
+            db.commit()
+            buyer_id, seller_id = reviewer.id, seller.id
+
+        headers = {
+            "Authorization": f"Bearer {auth.create_access_token({'sub': 'feedback_buyer'})}"
+        }
+        self.assertEqual(self.client.post(
+            "/feedback/", headers=headers,
+            json={"seller_feedback_id": 999999, "rating": 5, "text": "Good"},
+        ).status_code, 404)
+        self.assertEqual(self.client.post(
+            "/feedback/", headers=headers,
+            json={"seller_feedback_id": buyer_id, "rating": 5, "text": "Self"},
+        ).status_code, 403)
+        created = self.client.post(
+            "/feedback/", headers=headers,
+            json={"seller_feedback_id": seller_id, "rating": 5, "text": "Good"},
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        self.assertEqual(created.json()["bayer_id"], buyer_id)
+        forged = self.client.post(
+            "/feedback/", headers=headers,
+            json={
+                "seller_feedback_id": seller_id, "rating": 5,
+                "text": "Forged", "bayer_id": seller_id,
+            },
+        )
+        self.assertEqual(forged.status_code, 422, forged.text)
+
     def test_register_login_refresh_logout(self):
         register = self.register()
         self.assertEqual(register.status_code, 200, register.text)
