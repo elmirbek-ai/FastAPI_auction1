@@ -22,6 +22,7 @@ if "auction_ci" not in db_url or "localhost" not in db_url:
     raise RuntimeError("Refusing integration tests outside isolated local auction_ci database")
 
 from auction_app.api.endpoints.auth import auth_router  # noqa: E402
+from auction_app.api.endpoints import bid, car, auction  # noqa: E402
 from auction_app.db.database import Base, engine, SessionLocal  # noqa: E402
 from auction_app.db import models  # noqa: F401,E402
 from auction_app.api.endpoints.auth import create_access_token  # noqa: E402
@@ -47,6 +48,9 @@ class PostgreSQLRedisAuthenticationTests(unittest.TestCase):
         Base.metadata.create_all(bind=engine)
         app = FastAPI(lifespan=test_lifespan)
         app.include_router(auth_router)
+        app.include_router(bid.bid_router)
+        app.include_router(car.car_router)
+        app.include_router(auction.auction_router)
         cls._context = TestClient(app)
         cls.client = cls._context.__enter__()
 
