@@ -6,7 +6,7 @@ from auction_app.db.models import UserProfile
 from sqlalchemy.orm import Session
 
 from auction_app.db.database import SessionLocal
-from auction_app.db.models import Car
+from auction_app.db.models import Car, Auction, Bid
 from auction_app.db.schema import CarSchema
 
 car_router = APIRouter(prefix='/car', tags=['Car'])
@@ -98,9 +98,18 @@ async def car_delete(car_id: int, db: Session = Depends(get_db), user: UserProfi
 
     if car_db.seller_id != user.id:
         raise HTTPException(status_code=403, detail='Not the owner of this car')
+    # Deleting a car would cascade into its auction and placed bids.
+    # Protect the auction record once bidding has started.
+    auction_id = db.query(Auction.id).filter(Auction.car_id == car_db.id).scalar()
+    if auction_id is not None and db.query(Bid.id).filter(
+        Bid.auction_id == auction_id
+    ).first():
+        raise HTTPException(
+            status_code=409, detail='Cannot delete a car with accepted bids'
+        )
     db.delete(car_db)
     db.commit()
-    return {'message': 'Машина удалена'}
+    return {'message': 'Машина удалена'
 
 
 # Search for cars by brand, model, and fuel type
