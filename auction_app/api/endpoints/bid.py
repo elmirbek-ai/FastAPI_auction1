@@ -89,6 +89,9 @@ async def bid_delete(bid_id: int, db: Session = Depends(get_db), user: UserProfi
 
     if bid_db.user_id != user.id:
         raise HTTPException(status_code=403, detail='Not the owner of this bid')
-    db.delete(bid_db)
-    db.commit()
-    return {'message': 'Ставка удалена'}
+    # An accepted bid is part of the auction audit trail. Withdrawal requires
+    # a separately designed cancellation procedure, not destructive DELETE.
+    raise HTTPException(
+        status_code=409,
+        detail='Placed bids cannot be deleted',
+    )
