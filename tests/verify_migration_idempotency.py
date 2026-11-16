@@ -6,6 +6,10 @@ unversioned historical databases and must never run against production.
 import os
 import subprocess
 import sys
+from pathlib import Path
+
+# Direct script invocation otherwise places tests/, not repository root, on sys.path.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 if os.getenv("RUN_SERVICE_INTEGRATION_TESTS") != "1":
     raise SystemExit("Requires isolated CI services")
