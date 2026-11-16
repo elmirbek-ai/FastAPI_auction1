@@ -74,6 +74,20 @@ class FullApplicationStartupTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_every_admin_view_is_read_only(self):
+        from auction_app.admin.view import (
+            UserProfileAdmin, CarAdmin, AuctionAdmin, BidAdmin, FeedbackAdmin
+        )
+        for view in (
+            UserProfileAdmin, CarAdmin, AuctionAdmin, BidAdmin, FeedbackAdmin
+        ):
+            with self.subTest(view=view.__name__):
+                self.assertFalse(view.can_create)
+                self.assertFalse(view.can_edit)
+                self.assertFalse(view.can_delete)
+                self.assertFalse(view.can_export)
+                self.assertFalse(view.can_import)
+
     def test_admin_login_protected_by_hashed_credentials(self):
         from starlette.middleware.sessions import SessionMiddleware
         from auction_app.db.database import engine
