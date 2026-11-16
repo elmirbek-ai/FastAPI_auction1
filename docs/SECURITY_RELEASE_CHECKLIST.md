@@ -9,6 +9,8 @@ Review and merge **PR #4** rather than merging #2 and #3 separately.
 - SQLAlchemy smoke tests
 - JWT signature/type/expiry checks and unique JWT IDs
 - Registration, login, one-time refresh token rotation and logout tests
+- Logout rejects persisted but tampered, expired or wrong-account refresh tokens;
+  refresh token revocation uses an atomic conditional delete
 - Two immediate logins without a duplicate refresh-token database error
 - PostgreSQL 16, Redis 7, rate limiter, and Alembic upgrade/check
 - FastAPI app startup and SQLAdmin login/logout
@@ -24,6 +26,8 @@ Review and merge **PR #4** rather than merging #2 and #3 separately.
 
 - [ ] Rotate potentially exposed PostgreSQL, JWT/session, Redis or OAuth/API
       secrets. Changing current source files does **not** remove Git history.
+- [ ] Follow docs/API_CLIENT_MIGRATION.md and verify each actual frontend, bot,
+      mobile or third-party client against the new auth/write API contract.
 - [ ] Review how login, refresh, and logout are consumed by existing clients.
       The registration input schema changed; old refresh tokens are invalidated.
       Every successful refresh now rotates the refresh token; clients must
@@ -66,8 +70,13 @@ Review and merge **PR #4** rather than merging #2 and #3 separately.
       unauthenticated writes now return HTTP 401.
 - [ ] Test the intended production dependency versions and startup/deployment
       configuration. CI is deliberately limited to selected supported versions.
-- [ ] Check clean and existing-database migration paths and make a backup
-      before production migration. CI tests a disposable fresh database.
+- [x] CI reruns Alembic against a seeded, already-versioned disposable
+      PostgreSQL database and verifies that the existing record survives.
+- [ ] Audit the real existing database schema and Alembic revision before
+      deployment; this repository has only the initial Alembic revision.
+      An unversioned database with existing tables must NOT blindly run
+      'alembic upgrade head' or 'alembic stamp head'. Take a verified backup,
+      inspect parity, and prepare a separately reviewed adoption/migration plan.
 - [ ] Verify required branch protections, reviews and operational monitoring.
 
 ## PR cleanup (after final acceptance)
