@@ -180,18 +180,34 @@ class AuthenticationFlowTests(unittest.TestCase):
         created = self.client.post(
             "/bid/",
             headers={"Authorization": f"Bearer {buyer_access}"},
-            json={
-                "id": 777,
-                "auction_id": auction_id,
-                "user_id": seller_id,
-                "amount": 1200,
-                "date_registered": "2026-11-14T12:00:00",
-            },
+            json={"auction_id": auction_id, "amount": 1200},
         )
         self.assertEqual(created.status_code, 200, created.text)
         self.assertEqual(created.json()["user_id"], buyer_id)
         bid_id = created.json()["id"]
+
         seller_access = auth.create_access_token({"sub": "auction_seller"})
+        seller_bid = self.client.post(
+            "/bid/",
+            headers={"Authorization": f"Bearer {seller_access}"},
+            json={"auction_id": auction_id, "amount": 1500},
+        )
+        self.assertEqual(seller_bid.status_code, 403, seller_bid.text)
+
+        low = self.client.post(
+            "/bid/",
+            headers={"Authorization": f"Bearer {buyer_access}"},
+            json={"auction_id": auction_id, "amount": 1100},
+        )
+        self.assertEqual(low.status_code, 409, low.text)
+
+        invalid = self.client.post(
+            "/bid/",
+            headers={"Authorization": f"Bearer {buyer_access}"},
+            json={"auction_id": auction_id, "amount": -1},
+        )
+        self.assertEqual(invalid.status_code, 422, invalid.text)
+
         denied = self.client.delete(
             f"/bid/{bid_id}",
             headers={"Authorization": f"Bearer {seller_access}"},
@@ -202,6 +218,18 @@ class AuthenticationFlowTests(unittest.TestCase):
             headers={"Authorization": f"Bearer {buyer_access}"},
         )
         self.assertEqual(deleted.status_code, 200, deleted.text)
+        with self.Session() as db:
+            sale = db.query(models.Auction).filter(
+                models.Auction.id == auction_id
+            ).first()
+            sale.end_time = datetime(2020, 1, 1)
+            db.commit()
+        expired = self.client.post(
+            "/bid/",
+            headers={"Authorization": f"Bearer {buyer_access}"},
+            json={"auction_id": auction_id, "amount": 2000},
+        )
+        self.assertEqual(expired.status_code, 409, expired.text)
 
     def test_register_login_refresh_logout(self):
         register = self.register()
