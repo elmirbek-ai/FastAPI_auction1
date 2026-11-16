@@ -174,7 +174,7 @@ class AuthenticationFlowTests(unittest.TestCase):
             db.add(sale)
             db.commit()
             db.refresh(sale)
-            auction_id, seller_id, buyer_id = sale.id, seller.id, buyer.id
+            auction_id, seller_id, buyer_id, car_id = sale.id, seller.id, buyer.id, car.id
 
         buyer_access = auth.create_access_token({"sub": "auction_buyer"})
         created = self.client.post(
@@ -225,7 +225,7 @@ class AuthenticationFlowTests(unittest.TestCase):
         )
         self.assertEqual(delete_auction.status_code, 409, delete_auction.text)
         delete_car = self.client.delete(
-            f"/car/{car.id}",
+            f"/car/{car_id}",
             headers={"Authorization": f"Bearer {seller_access}"},
         )
         self.assertEqual(delete_car.status_code, 409, delete_car.text)
