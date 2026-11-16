@@ -65,5 +65,7 @@ jobs:
           python -m alembic upgrade head
           python -m alembic current
           python -m alembic check
+      - name: Verify re-running Alembic migrations preserves existing versioned data
+        run: python tests/verify_migration_idempotency.py
       - name: Smoke-test full application startup and SQLAdmin routing
         run: python -m unittest discover -s tests -p "integration_app_startup.py" -v
