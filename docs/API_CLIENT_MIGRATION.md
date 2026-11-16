@@ -56,6 +56,12 @@ Exact enum options are published in `/openapi.json`.
 }
 ```
 
+Auction times are normalized to **UTC** before they are stored in legacy
+UTC-naive PostgreSQL `DateTime` columns. Send explicit RFC 3339 offsets or
+`Z` (recommended); offset-free times are interpreted as UTC. API readback
+currently returns naive ISO datetimes that represent UTC, not local time.
+Clients must not reinterpret them as device-local timestamps.
+
 **Place bid:** `POST /bid/`
 
 ```json
